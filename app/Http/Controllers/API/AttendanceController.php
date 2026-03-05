@@ -7,6 +7,7 @@ use App\Models\Attendance;
 use App\Models\Event;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
+use Illuminate\Support\Facades\Log;
 use Maatwebsite\Excel\Facades\Excel;
 use App\Exports\AttendanceExport;
 
@@ -143,6 +144,20 @@ class AttendanceController extends Controller
             'success' => true,
             'message' => 'Attendance updated successfully',
             'data' => $attendance
+        ]);
+    }
+
+    /**
+     * Delete an attendance record
+     */
+    public function destroy($id)
+    {
+        $attendance = Attendance::findOrFail($id);
+        $attendance->delete();
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Attendance record deleted successfully'
         ]);
     }
 
@@ -333,41 +348,21 @@ class AttendanceController extends Controller
 
         return Excel::download(new AttendanceExport($event_id), $filename);
     }
-
     /**
  * Export attendance data
  */
-    public function exportEventAttendance()
+    public function exportEventAttendance(Request $request)
     {
         try {
             $user = auth()->user();
-            $attendances = Attendance::with(['event', 'recorder'])
-                ->whereHas('event', function ($q) use ($user) {
-                    $q->where('church_id', $user->church_id);
-                })
-                ->orderBy('created_at', 'desc')
-                ->get();
 
-            $data = $attendances->map(function ($attendance) {
-                return [
-                    'Event' => $attendance->event->title,
-                    'Date Recorded' => $attendance->created_at->format('Y-m-d H:i:s'),
-                    'Men' => $attendance->men,
-                    'Women' => $attendance->women,
-                    'Children' => $attendance->children,
-                    'Visitors' => $attendance->visitors,
-                    'Total' => $attendance->total,
-                    'Notes' => $attendance->notes,
-                    'Recorded By' => $attendance->recorder ? $attendance->recorder->name : 'System',
-                    'Event Date' => $attendance->event->start_date->format('Y-m-d'),
-                    'Event Type' => $attendance->event->type,
-                    'Event Location' => $attendance->event->location
-                ];
-            });
+            // allow optional filters (date range, event, category)
+            $filters = $request->only(['start_date', 'end_date', 'event_id', 'category']);
 
             $filename = 'attendance_export_' . date('Y-m-d') . '.xlsx';
 
-            return Excel::download(new AttendanceExport($data), $filename);
+            // the export class will apply filters and include church constraint
+            return Excel::download(new AttendanceExport($filters), $filename);
         } catch (\Exception $e) {
             Log::error('Error exporting attendance: ' . $e->getMessage());
             return response()->json([

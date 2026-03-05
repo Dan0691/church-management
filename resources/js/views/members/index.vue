@@ -985,8 +985,9 @@
   </div>
 </template>
 
+
 <script setup>
-import { ref, computed, onMounted, watch } from 'vue'
+import { ref, computed, onMounted, watch, onUnmounted } from 'vue'
 import { useToast } from 'vue-toastification'
 import { useRouter } from 'vue-router'
 import axios from 'axios'
@@ -998,7 +999,7 @@ const toast = useToast()
 const router = useRouter()
 const auth = useAuthStore()
 
-// Data
+// ---------- Data ----------
 const loading = ref(false)
 const saving = ref(false)
 const deleting = ref(false)
@@ -1027,7 +1028,6 @@ const importHeaders = ref([])
 const viewTab = ref('personal')
 const formStep = ref(1)
 
-// Pagination
 const pagination = ref({
   current_page: 1,
   per_page: 15,
@@ -1035,7 +1035,6 @@ const pagination = ref({
   last_page: 1
 })
 
-// Form
 const form = ref({
   first_name: '',
   last_name: '',
@@ -1072,33 +1071,30 @@ const sortOptions = ref([
 ])
 
 const genderOptions = ref([
-  { title: 'Male', value: 'Male' },
-  { title: 'Female', value: 'Female' },
-  { title: 'Other', value: 'Other' }
+  { title: 'Male', value: 'male' },
+  { title: 'Female', value: 'female' },
+  { title: 'Other', value: 'other' }
 ])
 
 const maritalStatusOptions = ref([
-  { title: 'Single', value: 'Single' },
-  { title: 'Married', value: 'Married' },
-  { title: 'Divorced', value: 'Divorced' },
-  { title: 'Widowed', value: 'Widowed' }
+  { title: 'Single', value: 'single' },
+  { title: 'Married', value: 'married' },
+  { title: 'Divorced', value: 'divorced' },
+  { title: 'Widowed', value: 'widowed' }
 ])
 
 const membershipStatusOptions = ref([
-  { title: 'Active', value: 'Active' },
-  { title: 'Inactive', value: 'Inactive' },
-  { title: 'Visitor', value: 'Visitor' }
+  { title: 'Active', value: 'active' },
+  { title: 'Inactive', value: 'inactive' },
+  { title: 'Visitor', value: 'visitor' }
 ])
 
 const stepperSteps = ref(['Personal', 'Contact', 'Church', 'Review'])
-
-// Breadcrumbs
 const breadcrumbs = ref([
   { title: 'Dashboard', to: '/' },
   { title: 'Members', disabled: true }
 ])
 
-// Quick filters
 const quickFilters = ref([
   { label: 'Active Members', value: 'active', active: false },
   { label: 'New This Month', value: 'new_month', active: false },
@@ -1107,7 +1103,6 @@ const quickFilters = ref([
   { label: 'Birthday This Month', value: 'birthday', active: false }
 ])
 
-// Advanced filters
 const advancedFilters = ref({
   gender: [],
   marital_status: [],
@@ -1117,16 +1112,15 @@ const advancedFilters = ref({
   birthYear: ''
 })
 
-// Form refs
 const personalForm = ref(null)
 const contactForm = ref(null)
 const churchForm = ref(null)
 
-// Computed properties
+// ---------- Computed ----------
 const activeFilterCount = computed(() => {
   let count = 0
-  if (advancedFilters.value.gender.length > 0) count++
-  if (advancedFilters.value.marital_status.length > 0) count++
+  if (advancedFilters.value.gender?.length) count++
+  if (advancedFilters.value.marital_status?.length) count++
   if (advancedFilters.value.city) count++
   if (advancedFilters.value.occupation) count++
   if (advancedFilters.value.joinDateRange.start || advancedFilters.value.joinDateRange.end) count++
@@ -1136,19 +1130,10 @@ const activeFilterCount = computed(() => {
   return count
 })
 
-const hasActiveFilters = computed(() => {
-  return activeFilterCount.value > 0
-})
+const hasActiveFilters = computed(() => activeFilterCount.value > 0)
 
 const ageGroups = computed(() => {
-  const groups = {
-    '0-18': 0,
-    '19-35': 0,
-    '36-50': 0,
-    '51-65': 0,
-    '65+': 0
-  }
-
+  const groups = { '0-18': 0, '19-35': 0, '36-50': 0, '51-65': 0, '65+': 0 }
   members.value.forEach(member => {
     const age = calculateAge(member.birth_date)
     if (age <= 18) groups['0-18']++
@@ -1157,135 +1142,123 @@ const ageGroups = computed(() => {
     else if (age <= 65) groups['51-65']++
     else groups['65+']++
   })
-
   return groups
 })
 
-
-// Remove stats update from fetchMembers entirely
-const fetchMembers = async () => {
-  loading.value = true
+// ---------- Helper Functions (from your original) ----------
+const formatDate = (dateString, format = 'standard') => {
+  if (!dateString) return 'N/A'
   try {
-    // ... existing code ...
+    const date = new Date(dateString)
+    if (isNaN(date.getTime())) return 'Invalid Date'
 
-    if (response.data.success) {
-      members.value = response.data.data || []
-
-      // Update pagination ONLY, not stats
-      if (response.data.meta) {
-        pagination.value = {
-          current_page: response.data.meta.current_page || 1,
-          per_page: response.data.meta.per_page || 15,
-          total: response.data.meta.total || 0,
-          last_page: response.data.meta.last_page || 1
-        }
-      }
-      // DO NOT update stats here!
-
-    } else {
-      members.value = []
-      toast.error(response.data.message || 'Failed to fetch members')
-    }
-
-  } catch (error) {
-    console.error('Error fetching members:', error)
-    handleError(error)
-    members.value = []
-  } finally {
-    loading.value = false
-  }
-}
-
-// Create a separate function for stats that only fetches once
-const fetchStats = async (force = false) => {
-  // Only fetch stats once unless forced
-  if (stats.value.total > 0 && !force) {
-    return
-  }
-
-  try {
-    const token = localStorage.getItem('token')
-    if (!token) return
-
-    // Use the dedicated stats endpoint if available
-    try {
-      const response = await axios.get('/api/members/stats', {
-        headers: { 'Authorization': `Bearer ${token}` }
+    if (format === 'short') {
+      return date.toLocaleDateString('en-US', {
+        month: 'short',
+        day: 'numeric',
+        year: 'numeric'
       })
-
-      if (response.data.success && response.data.data) {
-        stats.value = {
-          total: response.data.data.total || 0,
-          active: response.data.data.active || 0,
-          visitors: response.data.data.visitors || 0,
-          new_this_month: response.data.data.new_this_month || 0
-        }
-        return
-      }
-    } catch (error) {
-      console.log('Stats endpoint not available')
     }
-
-    // Fallback: fetch first page without filters to get stats
-    const response = await axios.get('/api/members', {
-      headers: { 'Authorization': `Bearer ${token}` },
-      params: { per_page: 1, page: 1 }
+    return date.toLocaleDateString('en-US', {
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric'
     })
-
-    if (response.data.success && response.data.stats) {
-      stats.value = response.data.stats
-    }
-
-  } catch (error) {
-    console.error('Error fetching stats:', error)
+  } catch {
+    return 'Invalid Date'
   }
 }
 
-// Update card click handlers to NOT trigger stats refresh
-const filterActiveMembers = () => {
-  resetAllFilters()
-  statusFilter.value = 'active'
-  quickFilters.value.forEach(f => {
-    f.active = f.value === 'active'
-  })
-  fetchMembers() // Don't call fetchStats here
+const formatGender = (gender) => {
+  if (!gender) return ''
+  const map = { male: 'Male', female: 'Female', other: 'Other' }
+  return map[gender.toLowerCase()] || gender
 }
 
-const filterVisitors = () => {
-  resetAllFilters()
-  statusFilter.value = 'visitor'
-  quickFilters.value.forEach(f => {
-    f.active = f.value === 'visitor'
-  })
-  fetchMembers() // Don't call fetchStats here
+const formatMaritalStatus = (status) => {
+  if (!status) return ''
+  const map = { single: 'Single', married: 'Married', divorced: 'Divorced', widowed: 'Widowed' }
+  return map[status.toLowerCase()] || status
 }
 
-const filterNewThisMonth = () => {
-  resetAllFilters()
-  const now = new Date()
-  const firstDay = new Date(now.getFullYear(), now.getMonth(), 1)
-  const lastDay = new Date(now.getFullYear(), now.getMonth() + 1, 0)
-  advancedFilters.value.joinDateRange.start = firstDay.toISOString().split('T')[0]
-  advancedFilters.value.joinDateRange.end = lastDay.toISOString().split('T')[0]
-  quickFilters.value.forEach(f => {
-    f.active = f.value === 'new_month'
-  })
-  fetchMembers() // Don't call fetchStats here
+const formatStatus = (status) => {
+  if (!status) return ''
+  const map = { active: 'Active', inactive: 'Inactive', visitor: 'Visitor' }
+  return map[status.toLowerCase()] || status
 }
 
-const showAllMembers = () => {
-  resetAllFilters()
-  fetchMembers()
-  // Only fetch stats when showing all members
-  fetchStats(true)
+const getStatusColor = (status) => {
+  if (!status) return 'grey'
+  const colors = { active: 'success', inactive: 'error', visitor: 'warning' }
+  return colors[status.toLowerCase()] || 'grey'
 }
 
-  // Update your fetchMembers function
+const calculateAge = (birthDate) => {
+  if (!birthDate) return 'N/A'
+  try {
+    const today = new Date()
+    const birth = new Date(birthDate)
+    if (isNaN(birth.getTime())) return 'N/A'
+    let age = today.getFullYear() - birth.getFullYear()
+    const monthDiff = today.getMonth() - birth.getMonth()
+    if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birth.getDate())) {
+      age--
+    }
+    return age
+  } catch {
+    return 'N/A'
+  }
+}
+
+const calculateDuration = (joinDate) => {
+  if (!joinDate) return ''
+  try {
+    const today = new Date()
+    const join = new Date(joinDate)
+    if (isNaN(join.getTime())) return ''
+    const years = today.getFullYear() - join.getFullYear()
+    const months = today.getMonth() - join.getMonth()
+    if (years > 0) return `${years} year${years > 1 ? 's' : ''}`
+    if (months > 0) return `${months} month${months > 1 ? 's' : ''}`
+    return 'Less than a month'
+  } catch {
+    return ''
+  }
+}
+
+const getInitials = (member) => {
+  if (!member) return '?'
+  const first = member.first_name?.[0] || ''
+  const last = member.last_name?.[0] || ''
+  return (first + last).toUpperCase() || '?'
+}
+
+const getAvatarColor = (member) => {
+  const colors = ['primary', 'secondary', 'success', 'error', 'warning', 'info', 'purple', 'pink', 'teal']
+  const name = ((member.first_name || '') + (member.last_name || '')).toLowerCase()
+  if (!name) return colors[0]
+  let hash = 0
+  for (let i = 0; i < name.length; i++) {
+    hash = name.charCodeAt(i) + ((hash << 5) - hash)
+  }
+  return colors[Math.abs(hash) % colors.length]
+}
+
+const formatDateForInput = (dateString) => {
+  if (!dateString) return ''
+  try {
+    const date = new Date(dateString)
+    return isNaN(date.getTime()) ? '' : date.toISOString().split('T')[0]
+  } catch {
+    return ''
+  }
+}
+
+// ---------- API Calls ----------
 const fetchMembers = async () => {
   loading.value = true
   try {
     const token = localStorage.getItem('token')
-
     if (!token) {
       toast.error('No authentication token found. Please login.')
       router.push('/login')
@@ -1301,26 +1274,22 @@ const fetchMembers = async () => {
       ...advancedFilters.value
     }
 
-    // Clean up params
+    // Clean up empty params
     Object.keys(params).forEach(key => {
-      if (params[key] === '' || params[key] === null || params[key] === undefined ||
-          (Array.isArray(params[key]) && params[key].length === 0)) {
+      const val = params[key]
+      if (val === '' || val === null || val === undefined ||
+          (Array.isArray(val) && val.length === 0)) {
         delete params[key]
       }
     })
 
     const response = await axios.get('/api/members', {
-      headers: {
-        'Authorization': `Bearer ${token}`,
-        'Accept': 'application/json'
-      },
-      params: params
+      headers: { Authorization: `Bearer ${token}` },
+      params
     })
 
     if (response.data.success) {
       members.value = response.data.data || []
-
-      // Update pagination
       if (response.data.meta) {
         pagination.value = {
           current_page: response.data.meta.current_page || 1,
@@ -1330,31 +1299,24 @@ const fetchMembers = async () => {
         }
       }
 
-      // IMPORTANT: Only update stats if we're viewing ALL members (no filters)
-      // This prevents stats from changing when filtering
+      // Update stats only when viewing all members (no filters)
       const hasNoFilters = !search.value &&
                           !statusFilter.value &&
-                          !advancedFilters.value.gender.length &&
-                          !advancedFilters.value.marital_status.length &&
+                          !advancedFilters.value.gender?.length &&
+                          !advancedFilters.value.marital_status?.length &&
                           !advancedFilters.value.city &&
                           !advancedFilters.value.occupation &&
                           !advancedFilters.value.joinDateRange.start &&
                           !advancedFilters.value.joinDateRange.end &&
-                          !advancedFilters.value.birthYear;
+                          !advancedFilters.value.birthYear
 
       if (hasNoFilters && response.data.stats) {
         stats.value = response.data.stats
-        console.log('Updating stats (no filters)')
-      } else if (hasNoFilters) {
-        computeLocalStats()
       }
-      // If filters are active, DON'T update stats - keep showing total counts
-
     } else {
       members.value = []
       toast.error(response.data.message || 'Failed to fetch members')
     }
-
   } catch (error) {
     console.error('Error fetching members:', error)
     handleError(error)
@@ -1363,145 +1325,40 @@ const fetchMembers = async () => {
     loading.value = false
   }
 }
-// Remove the fetchStats function entirely or simplify it:
-const fetchStats = async () => {
-  // Since stats come with members, just compute from current data
-  computeLocalStats()
 
-  // Optional: If you want fresh stats, fetch a single member (page 1, per_page=1)
-  // to trigger the stats computation in the backend
+const fetchStats = async () => {
   try {
     const token = localStorage.getItem('token')
-    if (token) {
-      const response = await axios.get('/api/members', {
-        headers: { 'Authorization': `Bearer ${token}` },
+    if (!token) return
+
+    // Try dedicated stats endpoint
+    const response = await axios.get('/api/members/stats', {
+      headers: { Authorization: `Bearer ${token}` }
+    })
+
+    if (response.data.success && response.data.data) {
+      stats.value = {
+        total: response.data.data.total || 0,
+        active: response.data.data.active || 0,
+        visitors: response.data.data.visitors || 0,
+        new_this_month: response.data.data.new_this_month || 0
+      }
+    } else {
+      // Fallback: get total count from first page
+      const fallback = await axios.get('/api/members', {
+        headers: { Authorization: `Bearer ${token}` },
         params: { per_page: 1, page: 1 }
       })
-      if (response.data.success && response.data.stats) {
-        stats.value = response.data.stats
+      if (fallback.data.meta) {
+        stats.value.total = fallback.data.meta.total || 0
       }
     }
   } catch (error) {
-    console.log('Using local stats')
+    console.error('Error fetching stats:', error)
   }
 }
 
-// Alternative: Create a separate function to get ALL members for stats
-const fetchAllMembersForStats = async () => {
-  try {
-    const token = localStorage.getItem('token')
-    let allMembers = []
-    let currentPage = 1
-    let hasMorePages = true
-
-    while (hasMorePages) {
-      const response = await axios.get('/api/members', {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Accept': 'application/json'
-        },
-        params: {
-          per_page: 100,
-          page: currentPage
-        }
-      })
-
-      if (response.data.success && response.data.data) {
-        allMembers = [...allMembers, ...response.data.data]
-
-        // Check if there are more pages
-        if (response.data.meta) {
-          hasMorePages = currentPage < response.data.meta.last_page
-          currentPage++
-        } else if (response.data.links && response.data.links.next) {
-          currentPage++
-        } else {
-          hasMorePages = false
-        }
-      } else {
-        hasMorePages = false
-      }
-    }
-
-    return allMembers
-  } catch (error) {
-    console.error('Error fetching all members:', error)
-    return []
-  }
-}
-
-
-// Helper method to compute stats from member array
-const computeStatsFromMembers = (membersArray) => {
-  const now = new Date()
-  const currentMonth = now.getMonth()
-  const currentYear = now.getFullYear()
-
-  stats.value = {
-    total: membersArray.length,
-    active: membersArray.filter(m => m.membership_status === 'active').length,
-    visitors: membersArray.filter(m => m.membership_status === 'visitor').length,
-    new_this_month: membersArray.filter(m => {
-      if (!m.join_date) return false
-      const joinDate = new Date(m.join_date)
-      return joinDate.getMonth() === currentMonth &&
-             joinDate.getFullYear() === currentYear
-    }).length
-  }
-}
-
-const computeLocalStats = () => {
-  // This computes from current (filtered) members - which is WRONG
-  // We should get stats from backend or compute from unfiltered data
-
-  console.log('WARNING: computeLocalStats uses filtered data!')
-
-  const now = new Date()
-  const currentMonth = now.getMonth()
-  const currentYear = now.getFullYear()
-
-  stats.value = {
-    total: members.value.length,
-    active: members.value.filter(m =>
-      m.membership_status && m.membership_status.toLowerCase() === 'active'
-    ).length,
-    visitors: members.value.filter(m =>
-      m.membership_status && m.membership_status.toLowerCase() === 'visitor'
-    ).length,
-    new_this_month: members.value.filter(m => {
-      if (!m.join_date) return false
-      try {
-        const joinDate = new Date(m.join_date)
-        return joinDate.getMonth() === currentMonth &&
-               joinDate.getFullYear() === currentYear
-      } catch {
-        return false
-      }
-    }).length
-  }
-}
-
-const handleError = (error) => {
-  if (error.response) {
-    if (error.response.status === 401) {
-      toast.error('Session expired. Please login again.')
-      router.push('/login')
-    } else if (error.response.status === 422) {
-      const errors = error.response.data.errors
-      Object.keys(errors).forEach(key => {
-        toast.error(`${key}: ${errors[key][0]}`)
-      })
-    } else {
-      toast.error(error.response.data.message || `Server error: ${error.response.status}`)
-    }
-  } else if (error.request) {
-    toast.error('No response from server. Check your connection.')
-  } else {
-    toast.error('Failed to load members: ' + error.message)
-  }
-}
-
-// Card click handlers
+// ---------- Filter Handlers ----------
 const showAllMembers = () => {
   resetAllFilters()
   fetchMembers()
@@ -1511,20 +1368,14 @@ const showAllMembers = () => {
 const filterActiveMembers = () => {
   resetAllFilters()
   statusFilter.value = 'active'
-  // Update quick filter active state
-  quickFilters.value.forEach(f => {
-    f.active = f.value === 'active'
-  })
+  quickFilters.value.forEach(f => { f.active = f.value === 'active' })
   fetchMembers()
 }
 
 const filterVisitors = () => {
   resetAllFilters()
   statusFilter.value = 'visitor'
-  // Update quick filter active state
-  quickFilters.value.forEach(f => {
-    f.active = f.value === 'visitor'
-  })
+  quickFilters.value.forEach(f => { f.active = f.value === 'visitor' })
   fetchMembers()
 }
 
@@ -1535,22 +1386,13 @@ const filterNewThisMonth = () => {
   const lastDay = new Date(now.getFullYear(), now.getMonth() + 1, 0)
   advancedFilters.value.joinDateRange.start = firstDay.toISOString().split('T')[0]
   advancedFilters.value.joinDateRange.end = lastDay.toISOString().split('T')[0]
-  // Update quick filter active state
-  quickFilters.value.forEach(f => {
-    f.active = f.value === 'new_month'
-  })
+  quickFilters.value.forEach(f => { f.active = f.value === 'new_month' })
   fetchMembers()
 }
 
-// Quick filter methods
 const applyQuickFilter = (filter) => {
-  // Reset all quick filters first
   quickFilters.value.forEach(f => f.active = false)
-
-  // Set the clicked filter as active
   filter.active = true
-
-  // Reset other filters
   resetAdvancedFilters()
   statusFilter.value = ''
   search.value = ''
@@ -1600,152 +1442,17 @@ const resetAllFilters = () => {
   statusFilter.value = ''
   sortBy.value = 'created_at_desc'
   resetAdvancedFilters()
-
-  // Reset quick filters
   quickFilters.value.forEach(f => f.active = false)
-
   pagination.value.current_page = 1
-  fetchMembers()
 }
 
 const applyAdvancedFilters = () => {
   pagination.value.current_page = 1
-  // Reset quick filters when using advanced filters
   quickFilters.value.forEach(f => f.active = false)
   fetchMembers()
 }
 
-// Formatting helpers
-const formatDate = (dateString, format = 'standard') => {
-  if (!dateString) return 'N/A'
-  try {
-    const date = new Date(dateString)
-    if (isNaN(date.getTime())) return 'Invalid Date'
-
-    if (format === 'short') {
-      return date.toLocaleDateString('en-US', {
-        month: 'short',
-        day: 'numeric',
-        year: 'numeric'
-      })
-    }
-
-    return date.toLocaleDateString('en-US', {
-      year: 'numeric',
-      month: 'long',
-      day: 'numeric'
-    })
-  } catch {
-    return 'Invalid Date'
-  }
-}
-
-const formatGender = (gender) => {
-  if (!gender) return ''
-  const genderMap = {
-    'male': 'Male',
-    'female': 'Female',
-    'other': 'Other'
-  }
-  return genderMap[gender.toLowerCase()] || gender
-}
-
-const formatMaritalStatus = (status) => {
-  if (!status) return ''
-  const statusMap = {
-    'single': 'Single',
-    'married': 'Married',
-    'divorced': 'Divorced',
-    'widowed': 'Widowed'
-  }
-  return statusMap[status.toLowerCase()] || status
-}
-
-const formatStatus = (status) => {
-  if (!status) return ''
-  const statusMap = {
-    'active': 'Active',
-    'inactive': 'Inactive',
-    'visitor': 'Visitor'
-  }
-  return statusMap[status.toLowerCase()] || status
-}
-
-const getStatusColor = (status) => {
-  if (!status) return 'grey'
-  const statusLower = status.toLowerCase()
-  const colors = {
-    'active': 'success',
-    'inactive': 'error',
-    'visitor': 'warning'
-  }
-  return colors[statusLower] || 'grey'
-}
-
-const calculateAge = (birthDate) => {
-  if (!birthDate) return 'N/A'
-  try {
-    const today = new Date()
-    const birth = new Date(birthDate)
-    if (isNaN(birth.getTime())) return 'N/A'
-
-    let age = today.getFullYear() - birth.getFullYear()
-    const monthDiff = today.getMonth() - birth.getMonth()
-
-    if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birth.getDate())) {
-      age--
-    }
-
-    return age
-  } catch {
-    return 'N/A'
-  }
-}
-
-const calculateDuration = (joinDate) => {
-  if (!joinDate) return ''
-  try {
-    const today = new Date()
-    const join = new Date(joinDate)
-    if (isNaN(join.getTime())) return ''
-
-    const years = today.getFullYear() - join.getFullYear()
-    const months = today.getMonth() - join.getMonth()
-
-    if (years > 0) {
-      return `${years} year${years > 1 ? 's' : ''}`
-    } else if (months > 0) {
-      return `${months} month${months > 1 ? 's' : ''}`
-    } else {
-      return 'Less than a month'
-    }
-  } catch {
-    return ''
-  }
-}
-
-const getInitials = (member) => {
-  if (!member) return '?'
-  const first = member.first_name?.[0] || ''
-  const last = member.last_name?.[0] || ''
-  return (first + last).toUpperCase() || '?'
-}
-
-const getAvatarColor = (member) => {
-  const colors = ['primary', 'secondary', 'success', 'error', 'warning', 'info', 'purple', 'pink', 'teal']
-  const name = ((member.first_name || '') + (member.last_name || '')).toLowerCase()
-
-  if (!name) return colors[0]
-
-  let hash = 0
-  for (let i = 0; i < name.length; i++) {
-    hash = name.charCodeAt(i) + ((hash << 5) - hash)
-  }
-  const index = Math.abs(hash) % colors.length
-  return colors[index]
-}
-
-// Member CRUD operations
+// ---------- CRUD Operations ----------
 const openCreateDialog = () => {
   resetForm()
   editingMember.value = null
@@ -1754,48 +1461,53 @@ const openCreateDialog = () => {
 }
 
 const goToNextStep = async () => {
-  if (formStep.value === 1) {
-    if (personalForm.value) {
-      const { valid } = await personalForm.value.validate()
-      if (!valid) {
-        toast.error('Please fill in all required fields in Personal Info')
-        return
-      }
-    } else {
-      if (!form.value.first_name.trim() || !form.value.last_name.trim()) {
-        toast.error('Please fill in First Name and Last Name')
-        return
-      }
+  if (formStep.value === 1 && !(await validatePersonal())) return
+  if (formStep.value === 2 && !(await validateContact())) return
+  if (formStep.value === 3 && !(await validateChurch())) return
+  formStep.value++
+}
+
+const validatePersonal = async () => {
+  if (personalForm.value) {
+    const { valid } = await personalForm.value.validate()
+    if (!valid) {
+      toast.error('Please fill in all required fields in Personal Info')
+      return false
     }
-  } else if (formStep.value === 2) {
-    if (contactForm.value) {
-      const { valid } = await contactForm.value.validate()
-      if (!valid) {
-        toast.error('Please correct the contact information')
-        return
-      }
-    }
-  } else if (formStep.value === 3) {
-    if (churchForm.value) {
-      const { valid } = await churchForm.value.validate()
-      if (!valid) {
-        toast.error('Please fill in all required fields in Church Info')
-        return
-      }
-    } else {
-      if (!form.value.join_date || !form.value.membership_status) {
-        toast.error('Please fill in Join Date and Membership Status')
-        return
-      }
+  } else if (!form.value.first_name.trim() || !form.value.last_name.trim()) {
+    toast.error('Please fill in First Name and Last Name')
+    return false
+  }
+  return true
+}
+
+const validateContact = async () => {
+  if (contactForm.value) {
+    const { valid } = await contactForm.value.validate()
+    if (!valid) {
+      toast.error('Please correct the contact information')
+      return false
     }
   }
+  return true
+}
 
-  formStep.value++
+const validateChurch = async () => {
+  if (churchForm.value) {
+    const { valid } = await churchForm.value.validate()
+    if (!valid) {
+      toast.error('Please fill in all required fields in Church Info')
+      return false
+    }
+  } else if (!form.value.join_date || !form.value.membership_status) {
+    toast.error('Please fill in Join Date and Membership Status')
+    return false
+  }
+  return true
 }
 
 const editMember = (member) => {
   editingMember.value = member
-  // Convert dates to input format
   form.value = {
     ...member,
     birth_date: member.birth_date ? formatDateForInput(member.birth_date) : '',
@@ -1820,8 +1532,6 @@ const saveMember = async () => {
   saving.value = true
   try {
     const token = localStorage.getItem('token')
-
-    // Prepare payload ensuring proper formatting
     const payload = {
       first_name: form.value.first_name.trim(),
       last_name: form.value.last_name.trim(),
@@ -1839,7 +1549,6 @@ const saveMember = async () => {
       church_id: form.value.church_id || auth.church?.id
     }
 
-    // Handle gender and marital_status with validation
     if (form.value.gender && genderOptions.value.some(g => g.value === form.value.gender)) {
       payload.gender = form.value.gender
     } else if (form.value.gender) {
@@ -1852,54 +1561,32 @@ const saveMember = async () => {
       throw new Error(`Invalid marital status value: ${form.value.marital_status}`)
     }
 
-    let response
-    if (editingMember.value) {
-      response = await axios.put(
-        `/api/members/${editingMember.value.id}`,
-        payload,
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-            'Content-Type': 'application/json'
-          }
-        }
-      )
-    } else {
-      response = await axios.post(
-        '/api/members',
-        payload,
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-            'Content-Type': 'application/json'
-          }
-        }
-      )
-    }
+    const response = editingMember.value
+      ? await axios.put(`/api/members/${editingMember.value.id}`, payload, {
+          headers: { Authorization: `Bearer ${token}` }
+        })
+      : await axios.post('/api/members', payload, {
+          headers: { Authorization: `Bearer ${token}` }
+        })
 
-     if (response.data.success) {
+    if (response.data.success) {
       toast.success(response.data.message || 'Member saved successfully')
       closeDialog()
-      fetchMembers()
-      fetchStats() // Refresh stats
+      await Promise.all([fetchMembers(), fetchStats()])
     } else {
       toast.error(response.data.message || 'Failed to save member')
     }
-
-    } catch (error) {
-        console.error('Error saving member:', error)
-        if (error.response?.status === 422) {
-        const errors = error.response.data.errors
-        // Show validation errors to user
-        Object.keys(errors).forEach(key => {
-            toast.error(`${key}: ${errors[key][0]}`)
-        })
-        } else {
-        toast.error(error.response?.data?.message || 'Failed to save member. Please try again.')
-        }
-    } finally {
-        saving.value = false
+  } catch (error) {
+    console.error('Error saving member:', error)
+    if (error.response?.status === 422) {
+      const errors = error.response.data.errors || {}
+      Object.values(errors).forEach(msg => toast.error(msg[0]))
+    } else {
+      toast.error(error.response?.data?.message || 'Failed to save member. Please try again.')
     }
+  } finally {
+    saving.value = false
+  }
 }
 
 const confirmDelete = async () => {
@@ -1907,17 +1594,13 @@ const confirmDelete = async () => {
   try {
     const token = localStorage.getItem('token')
     const response = await axios.delete(`/api/members/${selectedMemberToDelete.value.id}`, {
-      headers: {
-        'Authorization': `Bearer ${token}`
-      }
+      headers: { Authorization: `Bearer ${token}` }
     })
-
     if (response.data.success) {
       toast.success(response.data.message || 'Member deleted successfully')
       deleteDialog.value = false
       selectedMemberToDelete.value = null
-      fetchMembers()
-      fetchStats() // Refresh stats
+      await Promise.all([fetchMembers(), fetchStats()])
     } else {
       toast.error(response.data.message || 'Failed to delete member')
     }
@@ -1956,18 +1639,7 @@ const resetForm = () => {
   }
 }
 
-const formatDateForInput = (dateString) => {
-  if (!dateString) return ''
-  try {
-    const date = new Date(dateString)
-    if (isNaN(date.getTime())) return ''
-    return date.toISOString().split('T')[0]
-  } catch {
-    return ''
-  }
-}
-
-// Import functions
+// ---------- Import / Export ----------
 const openImportDialog = () => {
   importDialog.value = true
   importFile.value = null
@@ -1976,15 +1648,7 @@ const openImportDialog = () => {
 }
 
 const handleFileChange = () => {
-  if (!importFile.value) {
-    importPreview.value = []
-    importHeaders.value = []
-    return
-  }
-
-  setTimeout(() => {
-    previewImport()
-  }, 100)
+  setTimeout(() => previewImport(), 100)
 }
 
 const previewImport = () => {
@@ -2068,7 +1732,6 @@ const processImport = async () => {
 
   try {
     const token = localStorage.getItem('token')
-
     if (!token) {
       toast.error('Authentication required')
       importing.value = false
@@ -2092,12 +1755,10 @@ const processImport = async () => {
       importPreview.value = []
       importHeaders.value = []
 
-      await fetchMembers()
-      await fetchStats()
+      await Promise.all([fetchMembers(), fetchStats()])
     } else {
       toast.error(response.data.message || 'Import failed')
     }
-
   } catch (error) {
     console.error('Import error:', error)
     toast.error(error.response?.data?.message || 'Import failed. Please try again.')
@@ -2113,21 +1774,21 @@ const downloadTemplate = () => {
 
     const sampleData = [
       {
-        'first_name': 'John',
-        'last_name': 'Doe',
-        'email': 'john@example.com',
-        'phone': '07012345678',
-        'birth_date': '1990-03-03',
-        'join_date': today,
-        'gender': 'male',
-        'marital_status': 'married',
-        'occupation': 'Engineer',
-        'address': '123 Main St',
-        'city': 'Lagos',
-        'state': 'Lagos',
-        'zip_code': '100001',
-        'membership_status': 'active',
-        'notes': 'Sample member'
+        first_name: 'John',
+        last_name: 'Doe',
+        email: 'john@example.com',
+        phone: '07012345678',
+        birth_date: '1990-03-03',
+        join_date: today,
+        gender: 'male',
+        marital_status: 'married',
+        occupation: 'Engineer',
+        address: '123 Main St',
+        city: 'Lagos',
+        state: 'Lagos',
+        zip_code: '100001',
+        membership_status: 'active',
+        notes: 'Sample member'
       }
     ]
 
@@ -2145,7 +1806,6 @@ const downloadTemplate = () => {
 
     saveAs(blob, 'Church_Members_Import_Template.xlsx')
     toast.success('Template downloaded successfully!')
-
   } catch (error) {
     console.error('Error creating template:', error)
     toast.error('Failed to create template: ' + error.message)
@@ -2155,8 +1815,6 @@ const downloadTemplate = () => {
 const exportMembers = async () => {
   try {
     const token = localStorage.getItem('token')
-
-    // Fetch all members
     const response = await axios.get('/api/members', {
       headers: { Authorization: `Bearer ${token}` },
       params: {
@@ -2167,12 +1825,7 @@ const exportMembers = async () => {
       }
     })
 
-    let data = []
-    if (response.data.data) {
-      data = response.data.data
-    } else {
-      data = members.value
-    }
+    let data = response.data.data || members.value
 
     const exportData = data.map((member, index) => ({
       'No.': index + 1,
@@ -2206,7 +1859,6 @@ const exportMembers = async () => {
     saveAs(blob, filename)
 
     toast.success(`Exported ${exportData.length} members successfully!`)
-
   } catch (error) {
     console.error('Error exporting members:', error)
     toast.error('Failed to export members. Please try again.')
@@ -2216,8 +1868,6 @@ const exportMembers = async () => {
 const printMembers = async () => {
   try {
     const token = localStorage.getItem('token')
-
-    // Fetch all members for printing
     const response = await axios.get('/api/members', {
       headers: { Authorization: `Bearer ${token}` },
       params: {
@@ -2228,12 +1878,7 @@ const printMembers = async () => {
       }
     })
 
-    let allMembers = []
-    if (response.data.data) {
-      allMembers = response.data.data
-    } else {
-      allMembers = members.value
-    }
+    let allMembers = response.data.data || members.value
 
     const printContent = `
       <!DOCTYPE html>
@@ -2313,7 +1958,26 @@ const printMembers = async () => {
   }
 }
 
-// Debounced search
+// ---------- Error Handling ----------
+const handleError = (error) => {
+  if (error.response) {
+    if (error.response.status === 401) {
+      toast.error('Session expired. Please login again.')
+      router.push('/login')
+    } else if (error.response.status === 422) {
+      const errors = error.response.data.errors
+      Object.keys(errors).forEach(key => toast.error(`${key}: ${errors[key][0]}`))
+    } else {
+      toast.error(error.response.data.message || `Server error: ${error.response.status}`)
+    }
+  } else if (error.request) {
+    toast.error('No response from server. Check your connection.')
+  } else {
+    toast.error('Failed to load members: ' + error.message)
+  }
+}
+
+// ---------- Debounced Search ----------
 let searchTimeout = null
 const debouncedFetchMembers = () => {
   clearTimeout(searchTimeout)
@@ -2323,12 +1987,7 @@ const debouncedFetchMembers = () => {
   }, 500)
 }
 
-// Lifecycle
-onMounted(async () => {
-  await Promise.all([fetchMembers(), fetchStats()])
-})
-
-// Watch for changes
+// ---------- Watchers ----------
 watch([statusFilter, sortBy], () => {
   pagination.value.current_page = 1
   fetchMembers()
@@ -2337,6 +1996,15 @@ watch([statusFilter, sortBy], () => {
 watch(advancedFilters, () => {
   debouncedFetchMembers()
 }, { deep: true })
+
+// ---------- Lifecycle ----------
+onMounted(async () => {
+  await Promise.all([fetchMembers(), fetchStats()])
+})
+
+onUnmounted(() => {
+  clearTimeout(searchTimeout)
+})
 </script>
 
 <style scoped>

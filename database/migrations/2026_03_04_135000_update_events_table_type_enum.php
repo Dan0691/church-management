@@ -6,15 +6,12 @@ use Illuminate\Support\Facades\Schema;
 
 return new class extends Migration
 {
+    /**
+     * Run the migrations.
+     */
     public function up(): void
     {
-        Schema::create('events', function (Blueprint $table) {
-            $table->id();
-            $table->string('title');
-            $table->text('description')->nullable();
-            $table->dateTime('start_date');
-            $table->dateTime('end_date')->nullable();
-            $table->string('location')->nullable();
+        Schema::table('events', function (Blueprint $table) {
             $table->enum('type', [
                 'service',
                 'meeting',
@@ -29,14 +26,18 @@ return new class extends Migration
                 'training',
                 'conference',
                 'other'
-            ])->default('service');
-            $table->foreignId('church_id')->constrained()->onDelete('cascade');
-            $table->timestamps();
+            ])->default('service')->change();
         });
     }
 
+    /**
+     * Reverse the migrations.
+     */
     public function down(): void
     {
-        Schema::dropIfExists('events');
+        Schema::table('events', function (Blueprint $table) {
+            $table->enum('type', ['service', 'meeting', 'outreach', 'social', 'other'])
+                ->default('service')->change();
+        });
     }
 };

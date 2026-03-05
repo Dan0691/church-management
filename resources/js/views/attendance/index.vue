@@ -148,12 +148,12 @@
               <v-list-item
                 v-for="event in topEvents"
                 :key="event.id"
-                @click="viewEvent(event)"
+                filterByEvent(event)
                 class="mb-2"
               >
                 <template #prepend>
                   <v-avatar size="40" :color="getEventColor(event)" class="mr-3">
-                    <v-icon size="20" color="white">{{ getEventIcon(event.type) }}</v-icon>
+                    <v-icon size="20" color="white">{{ getEventIcon(event) }}</v-icon>
                   </v-avatar>
                 </template>
                 <v-list-item-title class="text-body-2 font-weight-medium">
@@ -211,6 +211,7 @@
               v-model="eventFilter"
               :items="eventOptions"
               label="Event"
+              no-data-text="No events"
               variant="outlined"
               density="comfortable"
               clearable
@@ -308,7 +309,7 @@
             <template #item.event.title="{ item }">
               <div class="d-flex align-center">
                 <v-avatar size="32" :color="getEventColor(item.event)" class="mr-2">
-                  <v-icon size="16" color="white">{{ getEventIcon(item.event.type) }}</v-icon>
+                  <v-icon size="16" color="white">{{ getEventIcon(item.event) }}</v-icon>
                 </v-avatar>
                 <div>
                   <div class="text-body-2 font-weight-medium">{{ item.event.title }}</div>
@@ -406,162 +407,159 @@
 
     <!-- Create/Edit Attendance Dialog -->
     <v-dialog v-model="dialog" max-width="800">
-      <v-card>
+    <v-card>
         <v-card-title class="d-flex justify-space-between align-center">
-          <span class="text-h5">{{ editingAttendance ? 'Edit Attendance' : 'Record New Attendance' }}</span>
-          <v-btn icon @click="closeDialog">
+        <span class="text-h5">{{ editingAttendance ? 'Edit Attendance' : 'Record New Attendance' }}</span>
+        <v-btn icon @click="closeDialog">
             <v-icon>mdi-close</v-icon>
-          </v-btn>
+        </v-btn>
         </v-card-title>
 
         <v-card-text>
-          <v-form ref="attendanceForm" v-model="formValid">
+        <v-form ref="attendanceForm" v-model="formValid">
             <v-row>
-              <v-col cols="12">
-                <v-select
-                  v-model="form.event_id"
-                  :items="events"
-                  item-title="title"
-                  item-value="id"
-                  label="Select Event *"
-                  variant="outlined"
-                  :rules="[v => !!v || 'Event is required']"
-                  required
-                  :loading="loadingEvents"
-                  @update:model-value="onEventSelect"
-                >
-                  <template #item="{ props, item }">
-                    <v-list-item v-bind="props">
-                      <template #prepend>
-                        <v-avatar :color="getEventColor(item.raw)" size="36" class="mr-2">
-                          <v-icon color="white">{{ getEventIcon(item.raw.type) }}</v-icon>
-                        </v-avatar>
-                      </template>
-                      <v-list-item-title>{{ item.title }}</v-list-item-title>
-                      <v-list-item-subtitle>
-                        {{ formatDate(item.raw.start_date) }} • {{ item.raw.type }}
-                      </v-list-item-subtitle>
-                    </v-list-item>
-                  </template>
-                </v-select>
-              </v-col>
+            <v-col cols="12">
+                <!-- FIXED v-select -->
+           <v-select
+        v-model="form.event_id"
+        :items="filteredEvents"
+        item-value="id"
+        label="Select Event *"
+        no-data-text="No events available"
+        variant="outlined"
+        :rules="[v => !!v || 'Event is required']"
+        required
+        :loading="loadingEvents"
+        :error="eventsError"
+        :error-messages="eventsError ? 'Failed to load events' : ''"
+        >
+        <!-- Dropdown items – receives full event object -->
+        <template #item="{ item, props }">
+            <v-list-item v-bind="props">
+            <template #prepend>
+                <v-avatar :color="getEventColor(item)" size="36" class="mr-2">
+                <v-icon color="white">{{ getEventIcon(item) }}</v-icon>
+                </v-avatar>
+            </template>
+            <!-- <v-list-item-title>{{ item.title }}</v-list-item-title> -->
+            <v-list-item-subtitle>
+                {{ formatDate(item.start_date) }} • {{ item.type }}
+            </v-list-item-subtitle>
+            </v-list-item>
+        </template>
 
-              <v-divider class="my-4"></v-divider>
+        <!-- Selected value – receives ID, so we use helpers -->
+        <template #selection="{ item }">
+            <span>{{ getEventTitle(item) }} ({{ getEventDate(item) }})</span>
+        </template>
+        </v-select>
+            </v-col>
 
-              <v-col cols="12">
+            <!-- Rest of the form (men, women, children, visitors, total, notes) unchanged -->
+            <v-divider class="my-4"></v-divider>
+
+            <v-col cols="12">
                 <h4 class="text-h6 mb-4">Attendance Breakdown</h4>
                 <v-row>
-                  <v-col cols="12" sm="6" md="3">
+                <v-col cols="12" sm="6" md="3">
                     <v-text-field
-                      v-model.number="form.men"
-                      label="Men"
-                      type="number"
-                      variant="outlined"
-                      :rules="[v => v >= 0 || 'Must be 0 or greater']"
-                      min="0"
-                      @input="updateTotal"
+                    v-model.number="form.men"
+                    label="Men"
+                    type="number"
+                    variant="outlined"
+                    :rules="[v => v >= 0 || 'Must be 0 or greater']"
+                    min="0"
+                    @input="updateTotal"
                     >
-                      <template #prepend>
-                        <v-icon color="primary">mdi-account-male</v-icon>
-                      </template>
+                    <template #prepend><v-icon color="primary">mdi-account-male</v-icon></template>
                     </v-text-field>
-                  </v-col>
+                </v-col>
 
-                  <v-col cols="12" sm="6" md="3">
+                <v-col cols="12" sm="6" md="3">
                     <v-text-field
-                      v-model.number="form.women"
-                      label="Women"
-                      type="number"
-                      variant="outlined"
-                      :rules="[v => v >= 0 || 'Must be 0 or greater']"
-                      min="0"
-                      @input="updateTotal"
+                    v-model.number="form.women"
+                    label="Women"
+                    type="number"
+                    variant="outlined"
+                    :rules="[v => v >= 0 || 'Must be 0 or greater']"
+                    min="0"
+                    @input="updateTotal"
                     >
-                      <template #prepend>
-                        <v-icon color="pink">mdi-account-female</v-icon>
-                      </template>
+                    <template #prepend><v-icon color="pink">mdi-account-female</v-icon></template>
                     </v-text-field>
-                  </v-col>
+                </v-col>
 
-                  <v-col cols="12" sm="6" md="3">
+                <v-col cols="12" sm="6" md="3">
                     <v-text-field
-                      v-model.number="form.children"
-                      label="Children"
-                      type="number"
-                      variant="outlined"
-                      :rules="[v => v >= 0 || 'Must be 0 or greater']"
-                      min="0"
-                      @input="updateTotal"
+                    v-model.number="form.children"
+                    label="Children"
+                    type="number"
+                    variant="outlined"
+                    :rules="[v => v >= 0 || 'Must be 0 or greater']"
+                    min="0"
+                    @input="updateTotal"
                     >
-                      <template #prepend>
-                        <v-icon color="orange">mdi-human-child</v-icon>
-                      </template>
+                    <template #prepend><v-icon color="orange">mdi-human-child</v-icon></template>
                     </v-text-field>
-                  </v-col>
+                </v-col>
 
-                  <v-col cols="12" sm="6" md="3">
+                <v-col cols="12" sm="6" md="3">
                     <v-text-field
-                      v-model.number="form.visitors"
-                      label="Visitors"
-                      type="number"
-                      variant="outlined"
-                      :rules="[v => v >= 0 || 'Must be 0 or greater']"
-                      min="0"
-                      @input="updateTotal"
+                    v-model.number="form.visitors"
+                    label="Visitors"
+                    type="number"
+                    variant="outlined"
+                    :rules="[v => v >= 0 || 'Must be 0 or greater']"
+                    min="0"
+                    @input="updateTotal"
                     >
-                      <template #prepend>
-                        <v-icon color="cyan">mdi-account-star</v-icon>
-                      </template>
+                    <template #prepend><v-icon color="cyan">mdi-account-star</v-icon></template>
                     </v-text-field>
-                  </v-col>
+                </v-col>
                 </v-row>
 
                 <v-row>
-                  <v-col cols="12" md="6">
+                <v-col cols="12" md="6">
                     <v-text-field
-                      v-model="form.total"
-                      label="Total Attendance"
-                      variant="outlined"
-                      readonly
-                      hint="Automatically calculated"
-                      persistent-hint
+                    v-model="form.total"
+                    label="Total Attendance"
+                    variant="outlined"
+                    readonly
+                    hint="Automatically calculated"
+                    persistent-hint
                     >
-                      <template #prepend>
-                        <v-icon color="success">mdi-account-group</v-icon>
-                      </template>
+                    <template #prepend><v-icon color="success">mdi-account-group</v-icon></template>
                     </v-text-field>
-                  </v-col>
+                </v-col>
                 </v-row>
-              </v-col>
+            </v-col>
 
-              <v-col cols="12">
+            <v-col cols="12">
                 <v-textarea
-                  v-model="form.notes"
-                  label="Notes"
-                  variant="outlined"
-                  rows="3"
-                  placeholder="Any additional notes about the attendance..."
+                v-model="form.notes"
+                label="Notes"
+                variant="outlined"
+                rows="3"
+                placeholder="Any additional notes about the attendance..."
                 ></v-textarea>
-              </v-col>
+            </v-col>
             </v-row>
-          </v-form>
+        </v-form>
         </v-card-text>
 
         <v-card-actions class="px-6 pb-4">
-          <v-spacer></v-spacer>
-          <v-btn variant="text" @click="closeDialog">
-            Cancel
-          </v-btn>
-          <v-btn
+        <v-spacer></v-spacer>
+        <v-btn variant="text" @click="closeDialog">Cancel</v-btn>
+        <v-btn
             color="primary"
             @click="saveAttendance"
             :loading="saving"
             :disabled="!formValid"
-          >
+        >
             {{ editingAttendance ? 'Update Attendance' : 'Save Attendance' }}
-          </v-btn>
+        </v-btn>
         </v-card-actions>
-      </v-card>
+    </v-card>
     </v-dialog>
 
     <!-- View Attendance Details Dialog -->
@@ -570,7 +568,7 @@
         <v-card-title class="d-flex justify-space-between align-center">
           <div class="d-flex align-center">
             <v-avatar :color="getEventColor(selectedAttendance.event)" size="48" class="mr-3">
-              <v-icon color="white">{{ getEventIcon(selectedAttendance.event.type) }}</v-icon>
+              <v-icon color="white">{{ getEventIcon(selectedAttendance.event) }}</v-icon>
             </v-avatar>
             <div>
               <h2 class="text-h5">{{ selectedAttendance.event.title }}</h2>
@@ -704,12 +702,12 @@
             </v-col>
           </v-row>
 
-          <v-divider class="my-4"></v-divider>
+          <!-- <v-divider class="my-4"></v-divider>
 
           <h4 class="text-subtitle-1 mb-2">Attendance Trends</h4>
-          <div style="height: 200px">
+          <div style="height: 100px">
             <canvas ref="trendsChart"></canvas>
-          </div>
+          </div> -->
         </v-card-text>
         <v-card-actions>
           <v-spacer></v-spacer>
@@ -844,9 +842,10 @@ const router = useRouter()
 const toast = useToast()
 const auth = useAuthStore()
 
-// Refs
+// ========== REACTIVE STATE ==========
 const loading = ref(false)
 const loadingEvents = ref(false)
+const eventsError = ref(false)
 const saving = ref(false)
 const deleting = ref(false)
 const dialog = ref(false)
@@ -859,12 +858,12 @@ const formValid = ref(false)
 const dateMenu = ref(false)
 const trendsTab = ref('daily')
 
-// Data
+// Data arrays
 const attendanceRecords = ref([])
 const events = ref([])
 const selectedAttendance = ref(null)
 const selectedAttendanceToDelete = ref(null)
-const editingAttendance = ref(null)
+const editingAttendance = ref(null)          // null = new record, object = editing
 const calendarDate = ref(new Date().toISOString().substring(0, 10))
 
 // Filters
@@ -873,7 +872,7 @@ const eventFilter = ref('')
 const categoryFilter = ref('')
 const dateRange = ref([null, null])
 
-// Form
+// Form – now uses event_id (primitive)
 const form = ref({
   event_id: null,
   men: 0,
@@ -884,7 +883,7 @@ const form = ref({
   notes: ''
 })
 
-// Charts refs
+// Chart refs
 const compositionChart = ref(null)
 const trendsChart = ref(null)
 const dailyTrendsChart = ref(null)
@@ -892,6 +891,7 @@ const weeklyTrendsChart = ref(null)
 const monthlyTrendsChart = ref(null)
 const comparisonChart = ref(null)
 const eventTypeChart = ref(null)
+const trendsLoading = ref(false)
 
 // Stats
 const stats = ref({
@@ -910,7 +910,7 @@ const stats = ref({
   visitors_total: 0
 })
 
-const detailedStats = ref({})
+
 
 // Breadcrumbs
 const breadcrumbs = ref([
@@ -930,7 +930,7 @@ const headers = ref([
   { title: 'Actions', key: 'actions', sortable: false }
 ])
 
-// Options
+// Options for filters
 const eventOptions = computed(() => {
   return events.value.map(event => ({
     title: event.title,
@@ -943,14 +943,30 @@ const categoryOptions = ref([
   'Women', 'Men', 'Prayer', 'Bible Study', 'Training', 'Conference'
 ])
 
-// Form refs
+// Set of event IDs that already have an attendance record
+const attendedEventIds = computed(() => {
+  return new Set(attendanceRecords.value.map(record => record.event_id))
+})
+
+const filterByEvent = (event) => {
+  // Set the event filter to this event's ID
+  eventFilter.value = event.id
+  // Fetch attendance records filtered by this event
+  fetchAttendance()
+  // Optional: smooth scroll to the table
+  const tableElement = document.querySelector('.v-data-table')
+  if (tableElement) {
+    tableElement.scrollIntoView({ behavior: 'smooth' })
+  }
+}
+
+// Form ref
 const attendanceForm = ref(null)
 
-// Computed properties
+// ========== COMPUTED PROPERTIES ==========
 const filteredAttendance = computed(() => {
   let filtered = attendanceRecords.value
 
-  // Apply search filter
   if (search.value) {
     const searchTerm = search.value.toLowerCase()
     filtered = filtered.filter(record =>
@@ -959,49 +975,35 @@ const filteredAttendance = computed(() => {
       record.event?.type?.toLowerCase().includes(searchTerm)
     )
   }
-
-  // Apply event filter
   if (eventFilter.value) {
     filtered = filtered.filter(record => record.event_id === eventFilter.value)
   }
-
-  // Apply category filter
   if (categoryFilter.value) {
     filtered = filtered.filter(record => record.event?.type === categoryFilter.value)
   }
-
-  // Apply date range filter
   if (dateRange.value[0] && dateRange.value[1]) {
     const startDate = new Date(dateRange.value[0])
     const endDate = new Date(dateRange.value[1])
     endDate.setHours(23, 59, 59, 999)
-
     filtered = filtered.filter(record => {
       const recordDate = new Date(record.created_at)
       return recordDate >= startDate && recordDate <= endDate
     })
   }
-
   return filtered
 })
 
 const topEvents = computed(() => {
-  // Group attendance by event
   const eventMap = new Map()
-
   attendanceRecords.value.forEach(record => {
     if (record.event) {
       const eventId = record.event.id
       if (!eventMap.has(eventId)) {
-        eventMap.set(eventId, {
-          ...record.event,
-          total_attendance: 0
-        })
+        eventMap.set(eventId, { ...record.event, total_attendance: 0 })
       }
       eventMap.get(eventId).total_attendance += record.total
     }
   })
-
   return Array.from(eventMap.values())
     .sort((a, b) => b.total_attendance - a.total_attendance)
     .slice(0, 5)
@@ -1030,7 +1032,134 @@ const monthlyViewTitle = computed(() => {
   return date.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
 })
 
-// Methods
+    // ✅ KEY FIX: Filter events to hide the currently selected one (for new records)
+    // const filteredEvents = computed(() => {
+    // // If editing, show all events (so you can keep the same or change to another)
+    // if (editingAttendance.value) {
+    //     return events.value
+    // }
+    // // For new attendance:
+    // // 1. Hide events that already have any attendance record
+    // // 2. Also hide the currently selected event (so it disappears immediately after picking)
+    // return events.value.filter(e =>
+    //     !attendedEventIds.value.has(e.id) && e.id !== form.value.event_id
+    // )
+    // })
+
+    const filteredEvents = computed(() => {
+  // If editing: show the current event + all events with no attendance
+  if (editingAttendance.value) {
+    const currentEventId = editingAttendance.value.event_id
+    return events.value.filter(e =>
+      e.id === currentEventId || !attendedEventIds.value.has(e.id)
+    )
+  }
+  // For new attendance: hide events that already have attendance
+  // and also hide the currently selected one (so it disappears after picking)
+  return events.value.filter(e =>
+    !attendedEventIds.value.has(e.id) && e.id !== form.value.event_id
+  )
+})
+
+
+    // Compute detailed stats from attendance records
+const detailedStats = computed(() => {
+  const total = stats.value.total_attendance
+  const records = stats.value.total_records
+  if (records === 0) return { 'No data': 'No attendance records yet' }
+
+  // Average per record
+  const avgPerRecord = (total / records).toFixed(1)
+
+  // Percentage breakdown
+  const menPct = getPercentage(stats.value.men_total, total)
+  const womenPct = getPercentage(stats.value.women_total, total)
+  const childrenPct = getPercentage(stats.value.children_total, total)
+  const visitorsPct = getPercentage(stats.value.visitors_total, total)
+
+  // Find busiest day (day with most total attendance)
+  const dayMap = new Map()
+  attendanceRecords.value.forEach(record => {
+    const day = new Date(record.created_at).toLocaleDateString()
+    dayMap.set(day, (dayMap.get(day) || 0) + record.total)
+  })
+  let busiestDay = 'N/A'
+  let maxAttendance = 0
+  dayMap.forEach((att, day) => {
+    if (att > maxAttendance) {
+      maxAttendance = att
+      busiestDay = day
+    }
+  })
+
+  // Count distinct events with attendance
+  const distinctEvents = new Set(attendanceRecords.value.map(r => r.event_id)).size
+
+  return {
+    'Average per record': avgPerRecord,
+    'Men': `${menPct}% (${stats.value.men_total})`,
+    'Women': `${womenPct}% (${stats.value.women_total})`,
+    'Children': `${childrenPct}% (${stats.value.children_total})`,
+    'Visitors': `${visitorsPct}% (${stats.value.visitors_total})`,
+    'Busiest day': `${busiestDay} (${maxAttendance})`,
+    'Events with attendance': distinctEvents,
+  }
+})
+// ========== METHODS ==========
+const calculateStats = () => {
+  const now = new Date()
+  const startOfWeek = new Date(now)
+  startOfWeek.setDate(now.getDate() - now.getDay())
+  const endOfWeek = new Date(startOfWeek)
+  endOfWeek.setDate(startOfWeek.getDate() + 6)
+
+  const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1)
+  const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0)
+
+  stats.value = {
+    total_attendance: 0,
+    total_records: 0,
+    today_attendance: 0,
+    today_records: 0,
+    this_week_attendance: 0,
+    this_week_records: 0,
+    this_month_attendance: 0,
+    this_month_records: 0,
+    avg_daily_attendance: 0,
+    men_total: 0,
+    women_total: 0,
+    children_total: 0,
+    visitors_total: 0
+  }
+
+  attendanceRecords.value.forEach(record => {
+    const recDate = new Date(record.created_at)
+    stats.value.total_attendance += record.total
+    stats.value.total_records += 1
+    stats.value.men_total += record.men || 0
+    stats.value.women_total += record.women || 0
+    stats.value.children_total += record.children || 0
+    stats.value.visitors_total += record.visitors || 0
+
+    if (recDate.toDateString() === now.toDateString()) {
+      stats.value.today_attendance += record.total
+      stats.value.today_records += 1
+    }
+    if (recDate >= startOfWeek && recDate <= endOfWeek) {
+      stats.value.this_week_attendance += record.total
+      stats.value.this_week_records += 1
+    }
+    if (recDate >= startOfMonth && recDate <= endOfMonth) {
+      stats.value.this_month_attendance += record.total
+      stats.value.this_month_records += 1
+    }
+  })
+
+  stats.value.avg_daily_attendance = stats.value.total_records > 0
+    ? Math.round(stats.value.total_attendance / stats.value.total_records)
+    : 0
+}
+
 const fetchAttendance = async () => {
   loading.value = true
   try {
@@ -1042,19 +1171,16 @@ const fetchAttendance = async () => {
       start_date: dateRange.value[0],
       end_date: dateRange.value[1]
     }
-
-    // Clean up params
-    Object.keys(params).forEach(key => {
-      if (!params[key]) delete params[key]
-    })
+    Object.keys(params).forEach(key => !params[key] && delete params[key])
 
     const response = await axios.get('/api/attendance', {
-      headers: { 'Authorization': `Bearer ${token}` },
+      headers: { Authorization: `Bearer ${token}` },
       params
     })
 
     if (response.data.success) {
       attendanceRecords.value = response.data.data || []
+      calculateStats()
     } else {
       toast.error(response.data.message || 'Failed to load attendance records')
     }
@@ -1068,18 +1194,37 @@ const fetchAttendance = async () => {
 
 const fetchEvents = async () => {
   loadingEvents.value = true
+  eventsError.value = false
   try {
     const token = localStorage.getItem('token')
+    if (!token) {
+      console.warn('No token found – cannot load events')
+      eventsError.value = true
+      toast.error('Authentication required to load events')
+      return
+    }
+
     const response = await axios.get('/api/events', {
-      headers: { 'Authorization': `Bearer ${token}` },
-      params: { per_page: 100 } // Fetch all events for dropdown
+      headers: { Authorization: `Bearer ${token}` },
+      params: { per_page: 100 }
     })
 
-    if (response.data.success) {
-      events.value = response.data.data || []
+    console.log('Events API response:', response.data) // debug
+
+    if (response.data.success && Array.isArray(response.data.data)) {
+      events.value = response.data.data
+      console.log(`Loaded ${events.value.length} events`)
+      if (events.value.length === 0) {
+        toast.info('No events found. Please create an event first.')
+      }
+    } else {
+      throw new Error('Invalid response structure')
     }
   } catch (error) {
     console.error('Error fetching events:', error)
+    eventsError.value = true
+    events.value = []
+    toast.error('Failed to load events. Please try again.')
   } finally {
     loadingEvents.value = false
   }
@@ -1089,21 +1234,21 @@ const fetchStats = async () => {
   try {
     const token = localStorage.getItem('token')
     const response = await axios.get('/api/attendance/stats', {
-      headers: { 'Authorization': `Bearer ${token}` }
+      headers: { Authorization: `Bearer ${token}` }
     })
-
     if (response.data.success) {
-      stats.value = response.data.data
+      Object.assign(stats.value, response.data.data)
     }
   } catch (error) {
     console.error('Error fetching stats:', error)
   }
 }
 
+// ✅ FIXED: Ensures a fresh state for new attendance
 const openCreateDialog = async () => {
-  editingAttendance.value = null
-  resetForm()
-  await fetchEvents() // Refresh events list
+  editingAttendance.value = null      // explicitly set to null (new record)
+  resetForm()                         // clear all form fields, including event_id
+  await fetchEvents()                 // reload events (optional, but good)
   dialog.value = true
 }
 
@@ -1118,6 +1263,14 @@ const editAttendance = (attendance) => {
     total: attendance.total,
     notes: attendance.notes || ''
   }
+
+  // Ensure the selected event exists in events array
+  const eventExists = events.value.some(e => e.id === attendance.event_id)
+  if (!eventExists && attendance.event) {
+    // Add the event from attendance record to the top of the list
+    events.value.unshift(attendance.event)
+  }
+
   dialog.value = true
 }
 
@@ -1127,13 +1280,10 @@ const viewAttendance = (attendance) => {
 }
 
 const viewAttendanceFromCalendar = ({ event }) => {
-  // Find the attendance record
   const attendance = attendanceRecords.value.find(
     record => record.event?.title === event.name.split(':')[0]
   )
-  if (attendance) {
-    viewAttendance(attendance)
-  }
+  if (attendance) viewAttendance(attendance)
 }
 
 const viewDayAttendance = ({ date }) => {
@@ -1141,7 +1291,6 @@ const viewDayAttendance = ({ date }) => {
     const recordDate = new Date(record.created_at).toDateString()
     return recordDate === new Date(date).toDateString()
   })
-
   if (dayAttendances.length > 0) {
     toast.info(`${dayAttendances.length} attendance records on ${formatDate(date)}`)
   } else {
@@ -1154,6 +1303,19 @@ const saveAttendance = async () => {
     toast.error('Please fill in all required fields correctly')
     return
   }
+  if (!form.value.event_id) {
+    toast.error('You must select an event before saving')
+    return
+  }
+
+  const payload = {
+    event_id: form.value.event_id,
+    men: form.value.men,
+    women: form.value.women,
+    children: form.value.children,
+    visitors: form.value.visitors,
+    notes: form.value.notes,
+  }
 
   saving.value = true
   try {
@@ -1161,18 +1323,16 @@ const saveAttendance = async () => {
     const endpoint = editingAttendance.value
       ? `/api/attendance/${editingAttendance.value.id}`
       : '/api/attendance'
-
     const method = editingAttendance.value ? 'put' : 'post'
 
-    const response = await axios[method](endpoint, form.value, {
-      headers: { 'Authorization': `Bearer ${token}` }
+    const response = await axios[method](endpoint, payload, {
+      headers: { Authorization: `Bearer ${token}` }
     })
 
     if (response.data.success) {
       toast.success(response.data.message || 'Attendance saved successfully')
       closeDialog()
       fetchAttendance()
-      fetchStats()
     } else {
       toast.error(response.data.message || 'Failed to save attendance')
     }
@@ -1202,11 +1362,8 @@ const deleteAttendance = async () => {
     const token = localStorage.getItem('token')
     const response = await axios.delete(
       `/api/attendance/${selectedAttendanceToDelete.value.id}`,
-      {
-        headers: { 'Authorization': `Bearer ${token}` }
-      }
+      { headers: { Authorization: `Bearer ${token}` } }
     )
-
     if (response.data.success) {
       toast.success('Attendance record deleted successfully')
       deleteDialog.value = false
@@ -1250,17 +1407,9 @@ const updateTotal = () => {
   form.value.total = men + women + children + visitors
 }
 
-const onEventSelect = (eventId) => {
-  const selectedEvent = events.value.find(e => e.id === eventId)
-  if (selectedEvent) {
-    // You could pre-fill some values based on the event if needed
-  }
-}
-
 const filterByDate = (period) => {
   const now = new Date()
-  let startDate = null
-  let endDate = null
+  let startDate = null, endDate = null
 
   switch (period) {
     case 'today':
@@ -1282,7 +1431,6 @@ const filterByDate = (period) => {
       endDate = endOfMonth.toISOString().split('T')[0]
       break
   }
-
   if (startDate && endDate) {
     dateRange.value = [startDate, endDate]
     fetchAttendance()
@@ -1292,11 +1440,45 @@ const filterByDate = (period) => {
 const exportAttendanceData = async () => {
   try {
     const token = localStorage.getItem('token')
+    const params = {
+      start_date: dateRange.value[0],
+      end_date: dateRange.value[1],
+      event_id: eventFilter.value,
+      category: categoryFilter.value
+    }
+    Object.keys(params).forEach(k => !params[k] && delete params[k])
+
     const response = await axios.get('/api/attendance/export', {
-      headers: { 'Authorization': `Bearer ${token}` },
-      responseType: 'blob'
+      headers: { Authorization: `Bearer ${token}` },
+      params,
+      responseType: 'blob' // Important: the response may be a file or an error HTML
     })
 
+    const contentType = response.headers['content-type'] || ''
+
+    // If the response is JSON (error), parse it
+    if (contentType.includes('application/json')) {
+      const text = await response.data.text() // response.data is a Blob
+      try {
+        const errorData = JSON.parse(text)
+        console.error('Export error details:', errorData)
+        toast.error(errorData.message || 'Export failed')
+      } catch (e) {
+        console.error('Raw error response:', text)
+        toast.error('Export failed with unknown error')
+      }
+      return
+    }
+
+    // If it's HTML (common for Laravel 500 errors), log it
+    if (contentType.includes('text/html')) {
+      const text = await response.data.text()
+      console.error('Received HTML error page:', text.substring(0, 500)) // first 500 chars
+      toast.error('Server error occurred. Please check the console.')
+      return
+    }
+
+    // Otherwise, treat as file and download
     const filename = `attendance_export_${new Date().toISOString().split('T')[0]}.xlsx`
     const url = window.URL.createObjectURL(new Blob([response.data]))
     const link = document.createElement('a')
@@ -1305,28 +1487,20 @@ const exportAttendanceData = async () => {
     document.body.appendChild(link)
     link.click()
     link.remove()
-
     toast.success('Attendance data exported successfully')
   } catch (error) {
     console.error('Error exporting attendance:', error)
-    toast.error('Failed to export attendance data')
+    toast.error('Export failed. Please check your connection or try again later.')
   }
 }
-
-const viewAllEvents = () => {
-  router.push('/events')
-}
-
-const viewEvent = (event) => {
-  router.push(`/events/${event.id}`)
-}
+const viewAllEvents = () => router.push('/events')
+const viewEvent = (event) => router.push(`/events/${event.id}`)
 
 const prevMonth = () => {
   const date = new Date(calendarDate.value)
   date.setMonth(date.getMonth() - 1)
   calendarDate.value = date.toISOString().substring(0, 10)
 }
-
 const nextMonth = () => {
   const date = new Date(calendarDate.value)
   date.setMonth(date.getMonth() + 1)
@@ -1334,18 +1508,57 @@ const nextMonth = () => {
 }
 
 // Chart methods
+const renderLineChart = (chartRef, labels, data) => {
+  if (!chartRef.value) return
+  if (chartRef.value.chart) chartRef.value.chart.destroy()
+  const ctx = chartRef.value.getContext('2d')
+  chartRef.value.chart = new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels,
+      datasets: [{
+        label: 'Attendance',
+        data,
+        borderColor: '#1976D2',
+        backgroundColor: 'rgba(25,118,210,0.2)',
+        tension: 0.3
+      }]
+    },
+    options: { responsive: true, maintainAspectRatio: false }
+  })
+}
+
+const fetchTrends = async (period) => {
+  trendsLoading.value = true
+  try {
+    const token = localStorage.getItem('token')
+    const response = await axios.get('/api/attendance/trends', {
+      headers: { Authorization: `Bearer ${token}` },
+      params: { period }
+    })
+    if (response.data.success) {
+      const data = response.data.data || []
+      const labels = data.map(d => d.day || d.month || d.date)
+      const attendance = data.map(d => d.attendance)
+      if (trendsTab.value === 'daily') renderLineChart(dailyTrendsChart, labels, attendance)
+      else if (trendsTab.value === 'weekly') renderLineChart(weeklyTrendsChart, labels, attendance)
+      else if (trendsTab.value === 'monthly') renderLineChart(monthlyTrendsChart, labels, attendance)
+    } else {
+      toast.error(response.data.message || 'Failed to load trends')
+    }
+  } catch (error) {
+    console.error('Error fetching trends:', error)
+    toast.error('Failed to load trends')
+  } finally {
+    trendsLoading.value = false
+  }
+}
 const initCharts = async () => {
   await nextTick()
-
-  // Destroy existing charts
-  [compositionChart, trendsChart, dailyTrendsChart, weeklyTrendsChart,
-   monthlyTrendsChart, comparisonChart, eventTypeChart].forEach(chartRef => {
-    if (chartRef.value && chartRef.value.chart) {
-      chartRef.value.chart.destroy()
-    }
+  const chartRefs = [compositionChart, trendsChart, dailyTrendsChart, weeklyTrendsChart, monthlyTrendsChart, comparisonChart, eventTypeChart]
+  chartRefs.forEach(chartRef => {
+    if (chartRef?.value?.chart) chartRef.value.chart.destroy()
   })
-
-  // Initialize composition chart
   if (compositionChart.value) {
     const ctx = compositionChart.value.getContext('2d')
     new Chart(ctx, {
@@ -1361,120 +1574,114 @@ const initCharts = async () => {
       options: {
         responsive: true,
         maintainAspectRatio: false,
-        plugins: {
-          legend: {
-            position: 'bottom'
-          }
-        }
+        plugins: { legend: { position: 'bottom' } }
       }
     })
   }
-
-  // Initialize trends chart (simplified)
-  // You would fetch trend data from your API
 }
+
+// ========== HELPER FUNCTIONS ==========
 const getEventColor = (event) => {
-  if (!event) return 'grey'
   const colors = {
-    service: 'primary',
-    midweek: 'secondary',
-    prayer: 'success',
-    bible_study: 'info',
-    youth: 'warning',
-    children: 'pink',
-    women: 'purple',
-    men: 'blue',
-    outreach: 'teal',
-    social: 'orange',
-    training: 'indigo',
-    conference: 'cyan',
-    other: 'grey'
+    service: 'primary', midweek: 'secondary', prayer: 'success', bible_study: 'info',
+    youth: 'warning', children: 'pink', women: 'purple', men: 'blue',
+    outreach: 'teal', social: 'orange', training: 'indigo', conference: 'cyan', other: 'grey'
   }
-  return colors[event.type] || 'grey'
+  const type = event?.type ?? (typeof event === 'string' ? event : undefined)
+  return colors[type] || 'grey'
 }
 
-const getEventIcon = (type) => {
+const getEventIcon = (eventOrType) => {
   const icons = {
-    service: 'mdi-church',
-    midweek: 'mdi-calendar',
-    prayer: 'mdi-hand-heart',
-    bible_study: 'mdi-book-open-variant',
-    youth: 'mdi-account-group',
-    children: 'mdi-human-child',
-    women: 'mdi-human-female',
-    men: 'mdi-human-male',
-    outreach: 'mdi-hand-heart',
-    social: 'mdi-party-popper',
-    training: 'mdi-school',
-    conference: 'mdi-microphone',
-    other: 'mdi-calendar'
+    service: 'mdi-church', midweek: 'mdi-calendar', prayer: 'mdi-hand-heart',
+    bible_study: 'mdi-book-open-variant', youth: 'mdi-account-group',
+    children: 'mdi-human-child', women: 'mdi-human-female', men: 'mdi-human-male',
+    outreach: 'mdi-hand-heart', social: 'mdi-party-popper', training: 'mdi-school',
+    conference: 'mdi-microphone', other: 'mdi-calendar'
   }
+  const type = eventOrType?.type ?? (typeof eventOrType === 'string' ? eventOrType : undefined)
   return icons[type] || 'mdi-calendar'
 }
 
 const formatDate = (dateString) => {
   if (!dateString) return 'N/A'
   const date = new Date(dateString)
-  return date.toLocaleDateString('en-US', {
-    year: 'numeric',
-    month: 'short',
-    day: 'numeric'
-  })
+  return date.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })
 }
 
 const formatDateTime = (dateString) => {
   if (!dateString) return 'N/A'
   const date = new Date(dateString)
-  return date.toLocaleString('en-US', {
-    month: 'short',
-    day: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit'
-  })
+  return date.toLocaleString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
 }
 
-const formatNumber = (num) => {
-  return new Intl.NumberFormat().format(num)
+const formatNumber = (num) => new Intl.NumberFormat().format(num)
+
+const getPercentage = (part, total) => total === 0 ? 0 : Math.round((part / total) * 100)
+
+// ✅ NEW: Helpers for displaying the selected event in the dropdown
+const getEventTitle = (id) => {
+  if (!id) return 'Select an event'
+  // Try to find in events list
+  let event = events.value.find(e => e.id === id)
+  // If not found and we're editing, use the event from the attendance record
+  if (!event && editingAttendance.value && editingAttendance.value.event) {
+    event = editingAttendance.value.event
+  }
+  return event ? event.title : 'Unknown event'
 }
 
-const getPercentage = (part, total) => {
-  if (total === 0) return 0
-  return Math.round((part / total) * 100)
+const getEventDate = (id) => {
+  if (!id) return ''
+  let event = events.value.find(e => e.id === id)
+  if (!event && editingAttendance.value && editingAttendance.value.event) {
+    event = editingAttendance.value.event
+  }
+  return event ? formatDate(event.start_date) : ''
 }
 
 // Debounced search
 let searchTimeout = null
 const debouncedFetchAttendance = () => {
   clearTimeout(searchTimeout)
-  searchTimeout = setTimeout(() => {
-    fetchAttendance()
-  }, 500)
+  searchTimeout = setTimeout(fetchAttendance, 500)
 }
 
-// Lifecycle
+// Debug watchers (uncomment to troubleshoot)
+// watch(() => form.value.event_id, (newId) => {
+//   console.log('form.event_id changed to', newId)
+// })
+// watch(editingAttendance, (val) => {
+//   console.log('editingAttendance:', val)
+// })
+// watch(filteredEvents, (newList) => {
+//   console.log('filteredEvents length:', newList.length)
+// }, { deep: true })
+
+// ========== LIFECYCLE ==========
 onMounted(async () => {
-  await Promise.all([
-    fetchAttendance(),
-    fetchEvents(),
-    fetchStats()
-  ])
+  await Promise.all([fetchAttendance(), fetchEvents(), fetchStats()])
   await initCharts()
 })
 
-// Watchers
-watch([eventFilter, categoryFilter], () => {
-  fetchAttendance()
-})
-
+// ========== WATCHERS ==========
+watch([eventFilter, categoryFilter], fetchAttendance)
 watch(dateRange, () => {
-  if (dateRange.value[0] && dateRange.value[1]) {
-    fetchAttendance()
+  if (dateRange.value[0] && dateRange.value[1]) fetchAttendance()
+})
+watch(() => stats.value, initCharts, { deep: true })
+watch(showTrends, (val) => {
+  if (val) {
+    const per = trendsTab.value === 'monthly' ? 'month' : 'week'
+    fetchTrends(per)
   }
 })
-
-watch(() => stats.value, () => {
-  initCharts()
-}, { deep: true })
+watch(trendsTab, (val) => {
+  if (showTrends.value) {
+    const per = val === 'monthly' ? 'month' : 'week'
+    fetchTrends(per)
+  }
+})
 </script>
 
 <style scoped>

@@ -25,6 +25,13 @@ class AttendanceExport implements FromCollection, WithHeadings, WithMapping, Wit
     {
         $query = Attendance::query();
 
+        // restrict to the current user's church if available
+        if ($user = auth()->user()) {
+            $query->whereHas('event', function ($q) use ($user) {
+                $q->where('church_id', $user->church_id);
+            });
+        }
+
         if ($this->eventId) {
             $query->where('event_id', $this->eventId);
         }
@@ -36,6 +43,12 @@ class AttendanceExport implements FromCollection, WithHeadings, WithMapping, Wit
 
         if (isset($this->filters['end_date']) && $this->filters['end_date']) {
             $query->whereDate('created_at', '<=', $this->filters['end_date']);
+        }
+
+        if (isset($this->filters['category']) && $this->filters['category']) {
+            $query->whereHas('event', function ($q) {
+                $q->where('type', $this->filters['category']);
+            });
         }
 
         return $query->with(['event', 'recordedBy'])->get();

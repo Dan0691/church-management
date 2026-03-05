@@ -4,7 +4,7 @@
     <v-card color="primary" class="mb-6">
       <v-card-text class="d-flex flex-column flex-md-row align-center justify-space-between py-6">
         <div class="text-white">
-          <h1 class="text-h4 font-weight-bold mb-2">Welcome back, {{ user?.name || 'Admin' }}!</h1>
+          <h6 class="text-h4 font-weight-bold mb-2">Welcome back, {{ user?.name || 'Admin' }}!</h6>
           <p class="text-subtitle-1">
             {{ getGreeting() }} • {{ church?.name || 'Church Management System' }}
           </p>
@@ -24,18 +24,68 @@
 
     <!-- Quick Stats -->
     <v-row class="mb-6">
-      <v-col cols="6" md="3" v-for="stat in quickStats" :key="stat.title">
-        <v-card class="stats-card" @click="stat.action && stat.action()">
+      <v-col cols="6" md="3">
+        <v-card class="stats-card" @click="() => router.push('/members')">
           <v-card-text class="d-flex align-center">
-            <v-avatar :color="stat.color" size="56" class="mr-4">
-              <v-icon size="32" color="white">{{ stat.icon }}</v-icon>
+            <v-avatar color="primary" size="56" class="mr-4">
+              <v-icon size="32" color="white">mdi-account-group</v-icon>
             </v-avatar>
             <div>
-              <div class="text-h4 font-weight-bold">{{ stat.value }}</div>
-              <div class="text-caption">{{ stat.title }}</div>
-              <div v-if="stat.change !== undefined" class="text-caption" :class="stat.change > 0 ? 'text-success' : 'text-error'">
-                {{ stat.change > 0 ? '↑' : '↓' }} {{ Math.abs(stat.change) }}% from last month
+              <div class="text-h4 font-weight-bold">{{ dashboardStats.members.total }}</div>
+              <div class="text-caption">Total Members</div>
+              <div class="text-caption text-success" v-if="dashboardStats.members.growth_percentage >= 0">
+                ↑ {{ dashboardStats.members.growth_percentage.toFixed(1) }}% from last month
               </div>
+              <div class="text-caption text-error" v-else>
+                ↓ {{ Math.abs(dashboardStats.members.growth_percentage).toFixed(1) }}% from last month
+              </div>
+            </div>
+          </v-card-text>
+        </v-card>
+      </v-col>
+
+      <v-col cols="6" md="3">
+        <v-card class="stats-card" @click="() => router.push('/events')">
+          <v-card-text class="d-flex align-center">
+            <v-avatar color="success" size="56" class="mr-4">
+              <v-icon size="32" color="white">mdi-calendar</v-icon>
+            </v-avatar>
+            <div>
+              <div class="text-h4 font-weight-bold">{{ dashboardStats.events.upcoming }}</div>
+              <div class="text-caption">Upcoming Events</div>
+              <div class="text-caption">{{ dashboardStats.events.total }} total</div>
+            </div>
+          </v-card-text>
+        </v-card>
+      </v-col>
+
+      <v-col cols="6" md="3">
+        <v-card class="stats-card">
+          <v-card-text class="d-flex align-center">
+            <v-avatar color="warning" size="56" class="mr-4">
+              <v-icon size="32" color="white">mdi-chart-line</v-icon>
+            </v-avatar>
+            <div>
+              <div class="text-h4 font-weight-bold">{{ dashboardStats.attendance.this_month }}</div>
+              <div class="text-caption">This Month Attendance</div>
+              <div class="text-caption" :class="dashboardStats.attendance.growth_percentage >= 0 ? 'text-success' : 'text-error'">
+                {{ dashboardStats.attendance.growth_percentage >= 0 ? '↑' : '↓' }} {{ Math.abs(dashboardStats.attendance.growth_percentage).toFixed(1) }}%
+              </div>
+            </div>
+          </v-card-text>
+        </v-card>
+      </v-col>
+
+      <v-col cols="6" md="3">
+        <v-card class="stats-card" @click="() => router.push('/members?filter=new')">
+          <v-card-text class="d-flex align-center">
+            <v-avatar color="info" size="56" class="mr-4">
+              <v-icon size="32" color="white">mdi-account-plus</v-icon>
+            </v-avatar>
+            <div>
+              <div class="text-h4 font-weight-bold">{{ dashboardStats.members.new_this_month }}</div>
+              <div class="text-caption">New This Month</div>
+              <div class="text-caption">Active: {{ dashboardStats.members.active }}</div>
             </div>
           </v-card-text>
         </v-card>
@@ -174,10 +224,10 @@
         <v-row>
           <v-col cols="12" md="4">
             <div class="d-flex align-center mb-3">
-              <v-icon :color="systemStatus.online ? 'success' : 'error'" class="mr-2">
-                {{ systemStatus.online ? 'mdi-check-circle' : 'mdi-alert-circle' }}
+              <v-icon :color="dashboardStats.system.status === 'online' ? 'success' : 'error'" class="mr-2">
+                {{ dashboardStats.system.status === 'online' ? 'mdi-check-circle' : 'mdi-alert-circle' }}
               </v-icon>
-              <span>System: {{ systemStatus.online ? 'Online' : 'Offline' }}</span>
+              <span>System: {{ dashboardStats.system.status === 'online' ? 'Online' : 'Offline' }}</span>
             </div>
           </v-col>
           <v-col cols="12" md="4">
@@ -189,7 +239,7 @@
           <v-col cols="12" md="4">
             <div class="d-flex align-center mb-3">
               <v-icon color="warning" class="mr-2">mdi-cloud</v-icon>
-              <span>Last Backup: {{ lastBackup }}</span>
+              <span>Last Backup: {{ dashboardStats.system.last_backup }}</span>
             </div>
           </v-col>
         </v-row>
@@ -212,6 +262,7 @@ const toast = useToast()
 // Reactive data
 const currentTime = ref('')
 const trendPeriod = ref('month')
+const loading = ref(false)
 const systemStatus = ref({
   online: true,
   database: true,
@@ -220,42 +271,29 @@ const systemStatus = ref({
 const lastBackup = ref('Yesterday, 2:00 AM')
 const recentMembers = ref([])
 const upcomingEvents = ref([])
+const dashboardStats = ref({
+  members: { total: 0, active: 0, new_this_month: 0, growth_percentage: 0 },
+  events: { total: 0, upcoming: 0, this_month: 0 },
+  attendance: { this_month: 0, last_month: 0, growth_percentage: 0 },
+  system: { status: 'online', last_backup: 'N/A', storage_used: '0%' }
+})
 
-// Stats
-const quickStats = ref([
-  {
-    title: 'Total Members',
-    value: 0,
-    icon: 'mdi-account-group',
-    color: 'primary',
-    change: 5,
-    action: () => router.push('/members')
-  },
-  {
-    title: 'Active Events',
-    value: 0,
-    icon: 'mdi-calendar',
-    color: 'success',
-    change: 12,
-    action: () => router.push('/events')
-  },
-  {
-    title: 'This Month Attendance',
-    value: 0,
-    icon: 'mdi-chart-line',
-    color: 'warning',
-    change: 8,
-    action: () => toast.info('View detailed report')
-  },
-  {
-    title: 'New This Week',
-    value: 0,
-    icon: 'mdi-account-plus',
-    color: 'info',
-    change: -2,
-    action: () => router.push('/members?filter=new')
+// Get axios instance with auth token
+const getApiClient = () => {
+  const token = localStorage.getItem('token')
+  const client = axios.create({
+    baseURL: '/api',
+    headers: {
+      'Content-Type': 'application/json'
+    }
+  })
+
+  if (token) {
+    client.defaults.headers.common['Authorization'] = `Bearer ${token}`
   }
-])
+
+  return client
+}
 
 const quickActions = ref([
   {
@@ -362,7 +400,7 @@ const getAvatarColor = (member) => {
   return colors[index]
 }
 
-const getEventColor = (event) => {
+const getEventColor = (eventOrType) => {
   const colors = {
     service: 'primary',
     midweek: 'secondary',
@@ -378,10 +416,11 @@ const getEventColor = (event) => {
     conference: 'cyan',
     other: 'grey'
   }
-  return colors[event.type] || 'grey'
+  const type = eventOrType?.type ?? (typeof eventOrType === 'string' ? eventOrType : undefined)
+  return colors[type] || 'grey'
 }
 
-const getEventIcon = (event) => {
+const getEventIcon = (eventOrType) => {
   const icons = {
     service: 'mdi-church',
     midweek: 'mdi-calendar',
@@ -397,83 +436,72 @@ const getEventIcon = (event) => {
     conference: 'mdi-microphone',
     other: 'mdi-calendar'
   }
-  return icons[event.type] || 'mdi-calendar'
+  const type = eventOrType?.type ?? (typeof eventOrType === 'string' ? eventOrType : undefined)
+  return icons[type] || 'mdi-calendar'
 }
 
-// Fetch dashboard data
-const fetchDashboardData = async () => {
+// Fetch dashboard stats
+const fetchDashboardStats = async () => {
   try {
-    const token = localStorage.getItem('token')
+    const client = getApiClient()
+    const response = await client.get('/dashboard/stats')
 
-    if (!token) {
-      // Use sample data if no token
-      quickStats.value[0].value = 145
-      quickStats.value[1].value = 8
-      quickStats.value[2].value = 1200
-      quickStats.value[3].value = 12
-
-      recentMembers.value = [
-        { id: 1, first_name: 'John', last_name: 'Doe', join_date: new Date().toISOString() },
-        { id: 2, first_name: 'Jane', last_name: 'Smith', join_date: new Date(Date.now() - 86400000).toISOString() }
-      ]
-
-      upcomingEvents.value = [
-        { id: 1, title: 'Sunday Service', type: 'service', start_date: new Date(Date.now() + 86400000).toISOString(), location: 'Main Hall' },
-        { id: 2, title: 'Youth Meeting', type: 'youth', start_date: new Date(Date.now() + 172800000).toISOString(), location: 'Youth Room' }
-      ]
-      return
+    if (response.data.success && response.data.data) {
+      dashboardStats.value = response.data.data
+      lastBackup.value = response.data.data.system.last_backup || 'N/A'
     }
+  } catch (error) {
+    console.error('Error fetching dashboard stats:', error)
+    toast.warning('Could not load some dashboard statistics')
+  }
+}
 
-    // Fetch stats
-    const statsRes = await axios.get('/api/dashboard/stats', {
-      headers: { Authorization: `Bearer ${token}` }
-    })
-
-    if (statsRes.data.success) {
-      const stats = statsRes.data.data
-      quickStats.value[0].value = stats.total_members || 0
-      quickStats.value[1].value = stats.active_events || 0
-      quickStats.value[2].value = stats.month_attendance || 0
-      quickStats.value[3].value = stats.new_this_week || 0
-    }
-
-    // Fetch recent members
-    const membersRes = await axios.get('/api/members/recent', {
-      headers: { Authorization: `Bearer ${token}` },
+// Fetch recent members
+const fetchRecentMembers = async () => {
+  try {
+    const client = getApiClient()
+    const response = await client.get('/members/recent', {
       params: { limit: 5 }
     })
 
-    if (membersRes.data.success) {
-      recentMembers.value = membersRes.data.data
+    if (response.data.success && Array.isArray(response.data.data)) {
+      recentMembers.value = response.data.data
     }
+  } catch (error) {
+    console.error('Error fetching recent members:', error)
+  }
+}
 
-    // Fetch upcoming events
-    const eventsRes = await axios.get('/api/events/upcoming', {
-      headers: { Authorization: `Bearer ${token}` },
+// Fetch upcoming events
+const fetchUpcomingEvents = async () => {
+  try {
+    const client = getApiClient()
+    const response = await client.get('/events/upcoming', {
       params: { limit: 5 }
     })
 
-    if (eventsRes.data.success) {
-      upcomingEvents.value = eventsRes.data.data
+    if (response.data.success && Array.isArray(response.data.data)) {
+      upcomingEvents.value = response.data.data
     }
+  } catch (error) {
+    console.error('Error fetching upcoming events:', error)
+  }
+}
 
+// Fetch all dashboard data
+const fetchDashboardData = async () => {
+  loading.value = true
+  try {
+    // Fetch all data in parallel
+    await Promise.all([
+      fetchDashboardStats(),
+      fetchRecentMembers(),
+      fetchUpcomingEvents()
+    ])
   } catch (error) {
     console.error('Error fetching dashboard data:', error)
-    // Use mock data for demonstration
-    quickStats.value[0].value = 145
-    quickStats.value[1].value = 8
-    quickStats.value[2].value = 1200
-    quickStats.value[3].value = 12
-
-    recentMembers.value = [
-      { id: 1, first_name: 'John', last_name: 'Doe', join_date: new Date().toISOString() },
-      { id: 2, first_name: 'Jane', last_name: 'Smith', join_date: new Date(Date.now() - 86400000).toISOString() }
-    ]
-
-    upcomingEvents.value = [
-      { id: 1, title: 'Sunday Service', type: 'service', start_date: new Date(Date.now() + 86400000).toISOString(), location: 'Main Hall' },
-      { id: 2, title: 'Youth Meeting', type: 'youth', start_date: new Date(Date.now() + 172800000).toISOString(), location: 'Youth Room' }
-    ]
+  } finally {
+    loading.value = false
   }
 }
 
@@ -505,22 +533,23 @@ const sendAnnouncement = () => {
 }
 
 // Lifecycle
+let clockInterval, refreshInterval
+
 onMounted(() => {
   // Start clock
   updateTime()
-  const clockInterval = setInterval(updateTime, 1000)
+  clockInterval = setInterval(updateTime, 1000)
 
   // Fetch data
   fetchDashboardData()
 
   // Refresh data every 5 minutes
-  const refreshInterval = setInterval(fetchDashboardData, 5 * 60 * 1000)
+  refreshInterval = setInterval(fetchDashboardData, 5 * 60 * 1000)
+})
 
-  // Cleanup
-  onUnmounted(() => {
-    clearInterval(clockInterval)
-    clearInterval(refreshInterval)
-  })
+onUnmounted(() => {
+  if (clockInterval) clearInterval(clockInterval)
+  if (refreshInterval) clearInterval(refreshInterval)
 })
 </script>
 

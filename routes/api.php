@@ -16,7 +16,7 @@ use App\Http\Controllers\Api\SettingsController;
 use App\Http\Controllers\Api\DashboardController;
 use App\Http\Controllers\Api\DepartmentController;
 use App\Http\Controllers\Api\NotificationController;
-use App\Http\Controllers\Api\PrayerRequestController;
+use App\Http\Controllers\Api\DiagnosticController;
 
 /*
 |--------------------------------------------------------------------------
@@ -41,8 +41,16 @@ Route::get('/health', function () {
     return response()->json(['status' => 'ok', 'timestamp' => now()]);
 });
 
+// Diagnostic endpoints
+Route::get('/diagnostic/auth', [DiagnosticController::class, 'checkAuth']);
+Route::get('/diagnostic/member/{id}', [DiagnosticController::class, 'checkMember']);
+
 // Protected routes with sanctum middleware
 Route::middleware(['auth:sanctum'])->group(function () {
+    // Diagnostic endpoints
+    Route::get('/diagnostic/auth', [DiagnosticController::class, 'checkAuth']);
+    Route::get('/diagnostic/member/{id}', [DiagnosticController::class, 'checkMember']);
+
     // Auth routes
     Route::post('/logout', [AuthController::class, 'logout']);
     Route::get('/user', [AuthController::class, 'user']);
@@ -169,24 +177,24 @@ Route::middleware(['auth:sanctum'])->group(function () {
         // Basic CRUD
         Route::get('/', [AttendanceController::class, 'index']);
         Route::post('/', [AttendanceController::class, 'store']);
-        Route::get('/{id}', [AttendanceController::class, 'show']);
-        Route::put('/{id}', [AttendanceController::class, 'update']);
-        Route::delete('/{id}', [AttendanceController::class, 'destroy']);
 
-        // Event-specific attendance
-        Route::get('/event/{event_id}', [AttendanceController::class, 'getByEvent']);
-        Route::get('/event/{event_id}/stats', [AttendanceController::class, 'eventStats']);
+        // routes that must not be swallowed by the {id} parameter
         Route::get('/export', [AttendanceController::class, 'exportEventAttendance']);
-
-        // General attendance
-        Route::get('/', [AttendanceController::class, 'index']);
         Route::get('/stats', [AttendanceController::class, 'stats']);
         Route::get('/trends', [AttendanceController::class, 'trends']);
         Route::get('/monthly/{year?}/{month?}', [AttendanceController::class, 'monthly']);
         Route::get('/yearly/{year?}', [AttendanceController::class, 'yearly']);
 
-        // Bulk operations
+        // Event-specific attendance
+        Route::get('/event/{event_id}', [AttendanceController::class, 'getByEvent']);
+        Route::get('/event/{event_id}/stats', [AttendanceController::class, 'eventStats']);
 
+        // parameterized id routes with numeric constraint so words won't match
+        Route::get('/{id}', [AttendanceController::class, 'show'])->where('id','[0-9]+');
+        Route::put('/{id}', [AttendanceController::class, 'update'])->where('id','[0-9]+');
+        Route::delete('/{id}', [AttendanceController::class, 'destroy'])->where('id','[0-9]+');
+
+        // Bulk operations
 
         // Reports
         Route::get('/report/pdf', [AttendanceController::class, 'generatePdfReport']);

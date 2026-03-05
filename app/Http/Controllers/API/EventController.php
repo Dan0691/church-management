@@ -17,19 +17,23 @@ class EventController extends Controller
         $user = auth()->user();
 
         if (!$user) {
+            \Log::error('getCurrentChurchId: No authenticated user');
             return null;
         }
 
         // If user has church_id directly
         if ($user->church_id) {
+            \Log::info('getCurrentChurchId: Found church_id=' . $user->church_id);
             return $user->church_id;
         }
 
         // If user has church relationship
         if ($user->church) {
+            \Log::info('getCurrentChurchId: Found church through relationship, id=' . $user->church->id);
             return $user->church->id;
         }
 
+        \Log::warning('getCurrentChurchId: User ' . $user->id . ' has no church_id or church relationship');
         return null;
     }
 
@@ -474,7 +478,7 @@ class EventController extends Controller
 
     public function calendar(Request $request)
     {
-        
+
         $year = $request->get('year', date('Y'));
         $month = $request->get('month', date('m'));
 

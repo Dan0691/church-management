@@ -171,6 +171,8 @@
               <v-select
                 v-model="eventTypeFilter"
                 :items="eventTypeOptions"
+                item-title="title"
+                item-value="value"
                 label="Event Type"
                 variant="outlined"
                 density="comfortable"
@@ -381,7 +383,9 @@
               <v-col cols="12" md="6">
                 <v-select
                   v-model="form.type"
-                  :items="eventTypes"
+                  :items="eventTypeOptions"
+                  item-title="title"
+                  item-value="value"
                   label="Event Type *"
                   variant="outlined"
                   :rules="[v => !!v || 'Event type is required']"
@@ -791,7 +795,7 @@
                   label="Men"
                   type="number"
                   variant="outlined"
-                  :rules="[v => v >= 0 || 'Must be a positive number']"
+                  :rules="[v => v == null || v === '' || v >= 0 || 'Must be a positive number']"
                   min="0"
                   @input="updateAttendanceTotal"
                 ></v-text-field>
@@ -802,7 +806,7 @@
                   label="Women"
                   type="number"
                   variant="outlined"
-                  :rules="[v => v >= 0 || 'Must be a positive number']"
+                  :rules="[v => v == null || v === '' || v >= 0 || 'Must be a positive number']"
                   min="0"
                   @input="updateAttendanceTotal"
                 ></v-text-field>
@@ -813,7 +817,7 @@
                   label="Children"
                   type="number"
                   variant="outlined"
-                  :rules="[v => v >= 0 || 'Must be a positive number']"
+                  :rules="[v => v == null || v === '' || v >= 0 || 'Must be a positive number']"
                   min="0"
                   @input="updateAttendanceTotal"
                 ></v-text-field>
@@ -824,7 +828,7 @@
                   label="Visitors"
                   type="number"
                   variant="outlined"
-                  :rules="[v => v >= 0 || 'Must be a positive number']"
+                  :rules="[v => v == null || v === '' || v >= 0 || 'Must be a positive number']"
                   min="0"
                   @input="updateAttendanceTotal"
                 ></v-text-field>
@@ -1001,32 +1005,16 @@ const attendanceForm = ref({
 
 // Options
 const eventTypeOptions = ref([
-  'Service',
-  'Meeting',
-  'Outreach',
-  'Social',
-  'Youth',
-  'Children',
-  'Women',
-  'Men',
-  'Prayer',
-  'Bible Study',
-  'Training',
-  'Conference',
-  'Other'
-])
-
-const eventTypes = ref([
-  { title: 'Sunday Service', value: 'service' },
-  { title: 'Midweek Service', value: 'midweek' },
-  { title: 'Prayer Meeting', value: 'prayer' },
-  { title: 'Bible Study', value: 'bible_study' },
-  { title: 'Youth Meeting', value: 'youth' },
-  { title: 'Children\'s Program', value: 'children' },
-  { title: 'Women\'s Fellowship', value: 'women' },
-  { title: 'Men\'s Fellowship', value: 'men' },
+  { title: 'Service', value: 'service' },
+  { title: 'Meeting', value: 'meeting' },
   { title: 'Outreach', value: 'outreach' },
-  { title: 'Social Event', value: 'social' },
+  { title: 'Social', value: 'social' },
+  { title: 'Youth', value: 'youth' },
+  { title: 'Children', value: 'children' },
+  { title: 'Women', value: 'women' },
+  { title: 'Men', value: 'men' },
+  { title: 'Prayer', value: 'prayer' },
+  { title: 'Bible Study', value: 'bible_study' },
   { title: 'Training', value: 'training' },
   { title: 'Conference', value: 'conference' },
   { title: 'Other', value: 'other' }

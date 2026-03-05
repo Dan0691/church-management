@@ -10,7 +10,7 @@ class Attendance extends Model
     use HasFactory;
 
     protected $fillable = [
-        'event_id', 'children', 'men', 'women', 'visitors', 'total', 'recorded_by'
+        'event_id', 'children', 'men', 'women', 'visitors', 'total', 'recorded_by', 'notes'
     ];
 
     public function event()
@@ -19,6 +19,11 @@ class Attendance extends Model
     }
 
     public function recorder()
+    {
+        return $this->belongsTo(User::class, 'recorded_by');
+    }
+
+        public function recordedBy()
     {
         return $this->belongsTo(User::class, 'recorded_by');
     }
