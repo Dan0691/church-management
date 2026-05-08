@@ -11,7 +11,7 @@ class Member extends Model
     use HasFactory;
 
     protected $fillable = [
-        'first_name', 'last_name', 'email', 'phone',
+        'first_name', 'other_name', 'last_name', 'email', 'phone',
         'birth_date', 'join_date', 'address', 'city',
         'state', 'zip_code', 'membership_status', 'church_id',
         'gender', 'marital_status', 'occupation', 'notes', 'created_by'

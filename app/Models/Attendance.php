@@ -10,7 +10,7 @@ class Attendance extends Model
     use HasFactory;
 
     protected $fillable = [
-        'event_id', 'children', 'men', 'women', 'visitors', 'total', 'recorded_by', 'notes'
+        'event_id', 'children', 'men', 'women', 'visitors', 'total', 'recorded_by','church_id','notes'
     ];
 
     public function event()

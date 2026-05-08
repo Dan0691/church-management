@@ -29,12 +29,27 @@ const routes = [
     component: Login,
     meta: { guest: true }
   },
+ 
   {
-    path: '/register', // Add this route
+    path: '/register', 
     name: 'register',
     component: Register,
     meta: { guest: true }
   },
+
+   {
+    path: '/forgot-password',
+    name: 'forgot-password',
+    component: () => import('../views/auth/ForgotPassword.vue'),
+    meta: { guest: true }
+  },
+  {
+    path: '/reset-password',
+    name: 'reset-password',
+    component: () => import('../views/auth/ResetPassword.vue'),
+    meta: { guest: true }
+  },
+
   {
     path: '/',
     component: AppLayout,

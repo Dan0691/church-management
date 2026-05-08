@@ -2,14 +2,15 @@
 
 namespace App\Http\Controllers\Api;
 
+use App\Exports\MembersExport;
 use App\Http\Controllers\Controller;
-use PhpOffice\PhpSpreadsheet\IOFactory;
+use App\Imports\MembersImport;
 use App\Models\Member;
 use Illuminate\Http\Request;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Validator;
 use Maatwebsite\Excel\Facades\Excel;
-use App\Exports\MembersExport;
-use App\Imports\MembersImport;
+use PhpOffice\PhpSpreadsheet\IOFactory;
 
 class MemberController extends Controller
 {
@@ -42,118 +43,264 @@ class MemberController extends Controller
         return null;
     }
 
+        public function indexreal(Request $request)
+    {
+        $churchId = $this->getCurrentChurchId();
+
+        $query = Member::where('church_id', $churchId);
+
+        // Search
+            if ($request->has('search') && !empty($request->search)) {
+                $search = $request->search;
+
+                // Handle special search keywords
+                switch ($search) {
+                    case 'no-email':
+                        $query->whereNull('email')->orWhere('email', '');
+                        break;
+                    case 'no-phone':
+                        $query->whereNull('phone')->orWhere('phone', '');
+                        break;
+                    case 'birthday-month':
+                        $query->whereMonth('birth_date', date('m'));
+                        break;
+                    default:
+                        $query->where(function($q) use ($search) {
+                            $q->where('first_name', 'like', "%{$search}%")
+                            ->orWhere('other_name', 'like', "%{$search}%")
+                            ->orWhere('last_name', 'like', "%{$search}%")
+                            ->orWhere('email', 'like', "%{$search}%")
+                            ->orWhere('phone', 'like', "%{$search}%")
+                            ->orWhere('occupation', 'like', "%{$search}%");
+                        });
+                }
+            }
+
+            // Status filter
+            if ($request->has('status') && !empty($request->status)) {
+                $query->where('membership_status', $request->status);
+            }
+
+            // New this month filter (for quick filter)
+            if ($request->has('new_this_month') && $request->new_this_month) {
+                $query->whereMonth('join_date', date('m'))
+                    ->whereYear('join_date', date('Y'));
+            }
+
+            // Advanced filters
+            if ($request->has('gender') && !empty($request->gender)) {
+                $query->whereIn('gender', (array)$request->gender);
+            }
+
+            if ($request->has('marital_status') && !empty($request->marital_status)) {
+                $query->whereIn('marital_status', (array)$request->marital_status);
+            }
+
+            if ($request->has('city') && !empty($request->city)) {
+                $query->where('city', 'like', "%{$request->city}%");
+            }
+
+            if ($request->has('occupation') && !empty($request->occupation)) {
+                $query->where('occupation', 'like', "%{$request->occupation}%");
+            }
+
+            // Date range filters
+            // if ($request->has('joinDateRange.start') && !empty($request->{'joinDateRange.start'})) {
+            //     $query->whereDate('join_date', '>=', $request->{'joinDateRange.start'});
+            // }
+
+            // if ($request->has('joinDateRange.end') && !empty($request->{'joinDateRange.end'})) {
+            //     $query->whereDate('join_date', '<=', $request->{'joinDateRange.end'});
+            // }
+
+
+                $start = $request->input('joinDateRange.start');
+                if ($start) {
+                    $query->whereDate('join_date', '>=', $start);
+                }
+
+                $end = $request->input('joinDateRange.end');
+                if ($end) {
+                    $query->whereDate('join_date', '<=', $end);
+                }
+
+                if ($request->has('birthYear') && !empty($request->birthYear)) {
+                    $query->whereYear('birth_date', $request->birthYear);
+                }
+
+
+            // Sorting
+            $sortBy = $request->get('sort_by', 'created_at_desc');
+            switch ($sortBy) {
+                case 'name_asc':
+                    $query->orderBy('first_name')->orderBy('other_name')->orderBy('last_name');
+                    break;
+                case 'name_desc':
+                    $query->orderByDesc('first_name')->orderByDesc('other_name')->orderByDesc('last_name');
+                    break;
+                case 'join_date':
+                    $query->orderBy('join_date');
+                    break;
+                case 'birth_date':
+                    $query->orderBy('birth_date');
+                    break;
+                case 'created_at_asc':
+                    $query->orderBy('created_at');
+                    break;
+                case 'created_at_desc':
+                default:
+                    $query->orderByDesc('created_at');
+                    break;
+            }
+
+        // Paginate the filtered results
+        $perPage = $request->get('per_page', 15);
+        $members = $query->paginate($perPage);
+
+        // IMPORTANT: Calculate stats WITHOUT filters (from base query)
+        $baseQuery = Member::where('church_id', $churchId);
+
+        $stats = [
+            'total' => $baseQuery->count(),
+            'active' => $baseQuery->where('membership_status', 'active')->count(),
+            'visitors' => $baseQuery->where('membership_status', 'visitor')->count(),
+            'new_this_month' => $baseQuery
+                ->whereMonth('join_date', date('m'))
+                ->whereYear('join_date', date('Y'))
+                ->count(),
+        ];
+
+        return response()->json([
+            'success' => true,
+            'data' => $members->items(),
+            'meta' => [
+                'current_page' => $members->currentPage(),
+                'per_page' => $members->perPage(),
+                'total' => $members->total(),
+                'last_page' => $members->lastPage(),
+            ],
+            'stats' => $stats  // This will always be total stats
+        ]);
+    }
+
+
     public function index(Request $request)
 {
     $churchId = $this->getCurrentChurchId();
 
     $query = Member::where('church_id', $churchId);
 
-       // Search
-        if ($request->has('search') && !empty($request->search)) {
-            $search = $request->search;
+    // Search
+    if ($request->has('search') && !empty($request->search)) {
+        $search = $request->search;
 
-            // Handle special search keywords
-            switch ($search) {
-                case 'no-email':
-                    $query->whereNull('email')->orWhere('email', '');
-                    break;
-                case 'no-phone':
-                    $query->whereNull('phone')->orWhere('phone', '');
-                    break;
-                case 'birthday-month':
-                    $query->whereMonth('birth_date', date('m'));
-                    break;
-                default:
-                    $query->where(function($q) use ($search) {
-                        $q->where('first_name', 'like', "%{$search}%")
+        // Handle special search keywords
+        switch ($search) {
+            case 'no-email':
+                $query->whereNull('email')->orWhere('email', '');
+                break;
+            case 'no-phone':
+                $query->whereNull('phone')->orWhere('phone', '');
+                break;
+            case 'birthday-month':
+                $query->whereMonth('birth_date', date('m'));
+                break;
+            default:
+                $query->where(function($q) use ($search) {
+                    $q->where('first_name', 'like', "%{$search}%")
+                        ->orWhere('other_name', 'like', "%{$search}%")
                         ->orWhere('last_name', 'like', "%{$search}%")
                         ->orWhere('email', 'like', "%{$search}%")
                         ->orWhere('phone', 'like', "%{$search}%")
                         ->orWhere('occupation', 'like', "%{$search}%");
-                    });
-            }
+                });
         }
+    }
 
-        // Status filter
-        if ($request->has('status') && !empty($request->status)) {
-            $query->where('membership_status', $request->status);
-        }
+    // Status filter
+    if ($request->has('status') && !empty($request->status)) {
+        $query->where('membership_status', $request->status);
+    }
 
-        // New this month filter (for quick filter)
-        if ($request->has('new_this_month') && $request->new_this_month) {
-            $query->whereMonth('join_date', date('m'))
-                ->whereYear('join_date', date('Y'));
-        }
+    // New this month filter (for quick filter)
+    if ($request->has('new_this_month') && $request->new_this_month) {
+        $query->whereMonth('join_date', date('m'))
+            ->whereYear('join_date', date('Y'));
+    }
 
-        // Advanced filters
-        if ($request->has('gender') && !empty($request->gender)) {
-            $query->whereIn('gender', (array)$request->gender);
-        }
+    // Advanced filters
+    if ($request->has('gender') && !empty($request->gender)) {
+        $query->whereIn('gender', (array)$request->gender);
+    }
 
-        if ($request->has('marital_status') && !empty($request->marital_status)) {
-            $query->whereIn('marital_status', (array)$request->marital_status);
-        }
+    if ($request->has('marital_status') && !empty($request->marital_status)) {
+        $query->whereIn('marital_status', (array)$request->marital_status);
+    }
 
-        if ($request->has('city') && !empty($request->city)) {
-            $query->where('city', 'like', "%{$request->city}%");
-        }
+    if ($request->has('city') && !empty($request->city)) {
+        $query->where('city', 'like', "%{$request->city}%");
+    }
 
-        if ($request->has('occupation') && !empty($request->occupation)) {
-            $query->where('occupation', 'like', "%{$request->occupation}%");
-        }
+    if ($request->has('occupation') && !empty($request->occupation)) {
+        $query->where('occupation', 'like', "%{$request->occupation}%");
+    }
 
-        // Date range filters
-        if ($request->has('joinDateRange.start') && !empty($request->{'joinDateRange.start'})) {
-            $query->whereDate('join_date', '>=', $request->{'joinDateRange.start'});
-        }
+    // Date range filters
+    $start = $request->input('joinDateRange.start');
+    if ($start) {
+        $query->whereDate('join_date', '>=', $start);
+    }
 
-        if ($request->has('joinDateRange.end') && !empty($request->{'joinDateRange.end'})) {
-            $query->whereDate('join_date', '<=', $request->{'joinDateRange.end'});
-        }
+    $end = $request->input('joinDateRange.end');
+    if ($end) {
+        $query->whereDate('join_date', '<=', $end);
+    }
 
-        if ($request->has('birthYear') && !empty($request->birthYear)) {
-            $query->whereYear('birth_date', $request->birthYear);
-        }
+    if ($request->has('birthYear') && !empty($request->birthYear)) {
+        $query->whereYear('birth_date', $request->birthYear);
+    }
 
-        // Sorting
-        $sortBy = $request->get('sort_by', 'created_at_desc');
-        switch ($sortBy) {
-            case 'name_asc':
-                $query->orderBy('first_name')->orderBy('last_name');
-                break;
-            case 'name_desc':
-                $query->orderByDesc('first_name')->orderByDesc('last_name');
-                break;
-            case 'join_date':
-                $query->orderBy('join_date');
-                break;
-            case 'birth_date':
-                $query->orderBy('birth_date');
-                break;
-            case 'created_at_asc':
-                $query->orderBy('created_at');
-                break;
-            case 'created_at_desc':
-            default:
-                $query->orderByDesc('created_at');
-                break;
-        }
+    // Sorting
+    $sortBy = $request->get('sort_by', 'created_at_desc');
+    switch ($sortBy) {
+        case 'name_asc':
+            $query->orderBy('first_name')->orderBy('other_name')->orderBy('last_name');
+            break;
+        case 'name_desc':
+            $query->orderByDesc('first_name')->orderByDesc('other_name')->orderByDesc('last_name');
+            break;
+        case 'join_date':
+            $query->orderBy('join_date');
+            break;
+        case 'birth_date':
+            $query->orderBy('birth_date');
+            break;
+        case 'created_at_asc':
+            $query->orderBy('created_at');
+            break;
+        case 'created_at_desc':
+        default:
+            $query->orderByDesc('created_at');
+            break;
+    }
 
     // Paginate the filtered results
     $perPage = $request->get('per_page', 15);
     $members = $query->paginate($perPage);
 
-    // IMPORTANT: Calculate stats WITHOUT filters (from base query)
-    $baseQuery = Member::where('church_id', $churchId);
-
+    // ✅ FIXED: Calculate stats with fresh queries (not reusing the same query builder)
     $stats = [
-        'total' => $baseQuery->count(),
-        'active' => $baseQuery->where('membership_status', 'active')->count(),
-        'visitors' => $baseQuery->where('membership_status', 'visitor')->count(),
-        'new_this_month' => $baseQuery
-            ->whereMonth('join_date', date('m'))
-            ->whereYear('join_date', date('Y'))
-            ->count(),
+        'total' => Member::where('church_id', $churchId)->count(),
+        'active' => Member::where('church_id', $churchId)
+                        ->where('membership_status', 'active')
+                        ->count(),
+        'visitors' => Member::where('church_id', $churchId)
+                        ->where('membership_status', 'visitor')
+                        ->count(),
+        'new_this_month' => Member::where('church_id', $churchId)
+                            ->whereMonth('join_date', date('m'))
+                            ->whereYear('join_date', date('Y'))
+                            ->count(),
     ];
 
     return response()->json([
@@ -165,7 +312,7 @@ class MemberController extends Controller
             'total' => $members->total(),
             'last_page' => $members->lastPage(),
         ],
-        'stats' => $stats  // This will always be total stats
+        'stats' => $stats  // Now returns correct values, unaffected by filters
     ]);
 }
 
@@ -197,6 +344,7 @@ class MemberController extends Controller
                 default:
                     $query->where(function($q) use ($search) {
                         $q->where('first_name', 'like', "%{$search}%")
+                        ->orWhere('other_name', 'like', "%{$search}%")
                         ->orWhere('last_name', 'like', "%{$search}%")
                         ->orWhere('email', 'like', "%{$search}%")
                         ->orWhere('phone', 'like', "%{$search}%")
@@ -250,10 +398,10 @@ class MemberController extends Controller
         $sortBy = $request->get('sort_by', 'created_at_desc');
         switch ($sortBy) {
             case 'name_asc':
-                $query->orderBy('first_name')->orderBy('last_name');
+                $query->orderBy('first_name')->orderBy('other_name')->orderBy('last_name');
                 break;
             case 'name_desc':
-                $query->orderByDesc('first_name')->orderByDesc('last_name');
+                $query->orderByDesc('first_name')->orderByDesc('other_name')->orderByDesc('last_name');
                 break;
             case 'join_date':
                 $query->orderBy('join_date');
@@ -321,6 +469,7 @@ class MemberController extends Controller
             $search = $request->search;
             $query->where(function($q) use ($search) {
                 $q->where('first_name', 'like', "%{$search}%")
+                  ->orWhere('other_name', 'like', "%{$search}%")
                   ->orWhere('last_name', 'like', "%{$search}%")
                   ->orWhere('email', 'like', "%{$search}%")
                   ->orWhere('phone', 'like', "%{$search}%")
@@ -372,10 +521,10 @@ class MemberController extends Controller
         $sortBy = $request->get('sort_by', 'created_at_desc');
         switch ($sortBy) {
             case 'name_asc':
-                $query->orderBy('first_name')->orderBy('last_name');
+                $query->orderBy('first_name')->orderBy('other_name')->orderBy('last_name');
                 break;
             case 'name_desc':
-                $query->orderByDesc('first_name')->orderByDesc('last_name');
+                $query->orderByDesc('first_name')->orderByDesc('other_name')->orderByDesc('last_name');
                 break;
             case 'join_date':
                 $query->orderBy('join_date');
@@ -415,13 +564,14 @@ class MemberController extends Controller
 
     $validator = Validator::make($request->all(), [
         'first_name' => 'required|string|max:255',
+        'other_name' => 'required|string|max:255',
         'last_name' => 'required|string|max:255',
         'email' => 'nullable|email|unique:members,email',
         'phone' => 'nullable|string|max:20',
         'birth_date' => 'nullable|date',
         'join_date' => 'required|date',
-        'gender' => 'nullable|string|in:Male,Female,Other',
-        'marital_status' => 'nullable|string|in:Single,Married,Divorced,Widowed,Separated',
+        'gender' => 'nullable|string|in:male,female,Other',
+        'marital_status' => 'nullable|string|in:single,married,divorced,widowed,separated',
         'occupation' => 'nullable|string|max:255',
         'address' => 'nullable|string',
         'city' => 'nullable|string|max:100',
@@ -516,19 +666,21 @@ class MemberController extends Controller
 
         $validator = Validator::make($request->all(), [
             'first_name' => 'required|string|max:255',
+            'other_name' => 'required|string|max:255',
             'last_name' => 'required|string|max:255',
             'email' => 'nullable|email|unique:members,email,' . $id,
             'phone' => 'nullable|string|max:20',
             'birth_date' => 'nullable|date',
             'join_date' => 'required|date',
-            'gender' => 'nullable|string|in:Male,Female,Other',
-            'marital_status' => 'nullable|string|in:Single,Married,Divorced,Widowed,Separated',
+            'gender' => 'nullable|string|in:male,female,Other',
+            'marital_status' => 'nullable|string|in:single,married,divorced,widowed,separated',
             'occupation' => 'nullable|string|max:255',
             'address' => 'nullable|string',
             'city' => 'nullable|string|max:100',
             'state' => 'nullable|string|max:100',
             'zip_code' => 'nullable|string|max:20',
-            'membership_status' => 'required|in:Active,Inactive,Visitor,Pending,Transferred',
+            // 'membership_status' => 'required|in:Active,Inactive,Visitor,Pending,Transferred',
+            'membership_status' => 'required|in:active,inactive,visitor,pending,transferred',
             'notes' => 'nullable|string',
         ]);
 
@@ -796,7 +948,7 @@ public function importoriginan(Request $request)
             $rowData = array_combine($headers, $row);
 
             // Check for required fields
-            if (empty($rowData['first_name']) || empty($rowData['last_name'])) {
+            if (empty($rowData['first_name']) || empty($rowData['other_name']) || empty($rowData['last_name'])) {
                 $skipped++;
                 continue;
             }
@@ -817,6 +969,7 @@ public function importoriginan(Request $request)
             // Create member
             Member::create([
                 'first_name' => $rowData['first_name'],
+                'other_name' => $rowData['other_name'],
                 'last_name' => $rowData['last_name'],
                 'email' => $rowData['email'] ?? null,
                 'phone' => $rowData['phone'] ?? null,
@@ -881,62 +1034,93 @@ public function importoriginan(Request $request)
         ], 400);
     }
 
-  public function stats()
-{
-    try {
-        // Get church ID from authenticated user
-        $user = auth()->user();
 
-        // Debug: Log user info
-        \Log::info('Stats request from user:', [
-            'user_id' => $user->id,
-            'user_name' => $user->name,
-            'church_id' => $user->church_id
-        ]);
-
-        // Use the user's church_id directly
-        $churchId = $user->church_id;
+    public function stats()
+    {
+        $churchId = $this->getCurrentChurchId(); // adjust to your auth logic
 
         if (!$churchId) {
-            \Log::error('No church_id found for user', ['user_id' => $user->id]);
             return response()->json([
                 'success' => false,
-                'message' => 'User is not associated with any church'
-            ], 400);
+                'message' => 'No church associated with user'
+            ], 403);
         }
 
         $stats = [
             'total' => Member::where('church_id', $churchId)->count(),
             'active' => Member::where('church_id', $churchId)
-                ->where('membership_status', 'active')
-                ->count(),
+                        ->where('membership_status', 'active')->count(),
             'visitors' => Member::where('church_id', $churchId)
-                ->where('membership_status', 'visitor')
-                ->count(),
+                        ->where('membership_status', 'visitor')->count(),
             'new_this_month' => Member::where('church_id', $churchId)
-                ->whereMonth('join_date', date('m'))
-                ->whereYear('join_date', date('Y'))
-                ->count(),
+                            ->whereMonth('join_date', Carbon::now()->month)
+                            ->whereYear('join_date', Carbon::now()->year)
+                            ->count(),
         ];
-
-        \Log::info('Stats computed:', $stats);
 
         return response()->json([
             'success' => true,
             'data' => $stats
         ]);
-
-    } catch (\Exception $e) {
-        \Log::error('Stats error: ' . $e->getMessage(), [
-            'trace' => $e->getTraceAsString()
-        ]);
-
-        return response()->json([
-            'success' => false,
-            'message' => 'Server error: ' . $e->getMessage()
-        ], 500);
     }
-}
+
+    public function stats00()
+    {
+        try {
+            // Get church ID from authenticated user
+            $user = auth()->user();
+
+            // Debug: Log user info
+            \Log::info('Stats request from user:', [
+                'user_id' => $user->id,
+                'user_name' => $user->name,
+                'church_id' => $user->church_id
+            ]);
+
+            // Use the user's church_id directly
+            $churchId = $user->church_id;
+
+            if (!$churchId) {
+                \Log::error('No church_id found for user', ['user_id' => $user->id]);
+                return response()->json([
+                    'success' => false,
+                    'message' => 'User is not associated with any church'
+                ], 400);
+            }
+
+            $stats = [
+                'total' => Member::where('church_id', $churchId)->count(),
+                'active' => Member::where('church_id', $churchId)
+                    ->where('membership_status', 'active')
+                    ->count(),
+                'visitors' => Member::where('church_id', $churchId)
+                    ->where('membership_status', 'visitor')
+                    ->count(),
+                'new_this_month' => Member::where('church_id', $churchId)
+                    ->whereMonth('join_date', date('m'))
+                    ->whereYear('join_date', date('Y'))
+                    ->count(),
+            ];
+
+            \Log::info('Stats computed:', $stats);
+
+            return response()->json([
+                'success' => true,
+                'data' => $stats
+            ]);
+
+        } catch (\Exception $e) {
+            \Log::error('Stats error: ' . $e->getMessage(), [
+                'trace' => $e->getTraceAsString()
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Server error: ' . $e->getMessage()
+            ], 500);
+        }
+    }
+
     public function ageGroups()
     {
         // Get current user's church ID

@@ -787,7 +787,8 @@
           </v-btn>
         </v-card-title>
         <v-card-text>
-          <v-form ref="attendanceForm" v-model="attendanceFormValid">
+          <!-- <v-form ref="attendanceForm" v-model="attendanceFormValid"> -->
+          <v-form ref="attendanceFormRef" v-model="attendanceFormValid">
             <v-row>
               <v-col cols="6">
                 <v-text-field

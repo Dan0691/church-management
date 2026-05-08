@@ -17,34 +17,45 @@ class DashboardController extends Controller
 {
     public function stats()
     {
+        $churchId = auth()->user()->church_id; // Get current user's church ID
+
         // Member stats
-        $totalMembers = Member::count();
-        $activeMembers = Member::where('membership_status', 'active')->count();
-        $newThisMonth = Member::whereMonth('created_at', date('m'))
-            ->whereYear('created_at', date('Y'))
-            ->count();
-        $newLastMonth = Member::whereMonth('created_at', date('m', strtotime('-1 month')))
-            ->whereYear('created_at', date('Y', strtotime('-1 month')))
-            ->count();
+        $totalMembers = Member::where('church_id', $churchId)->count();
+        $activeMembers = Member::where('church_id', $churchId)
+                            ->where('membership_status', 'active')
+                            ->count();
+        $newThisMonth = Member::where('church_id', $churchId)
+                        ->whereMonth('created_at', date('m'))
+                        ->whereYear('created_at', date('Y'))
+                        ->count();
+        $newLastMonth = Member::where('church_id', $churchId)
+                        ->whereMonth('created_at', date('m', strtotime('-1 month')))
+                        ->whereYear('created_at', date('Y', strtotime('-1 month')))
+                        ->count();
         $memberGrowth = $newLastMonth > 0 ? (($newThisMonth - $newLastMonth) / $newLastMonth) * 100 : 100;
 
         // Event stats
-        $totalEvents = Event::count();
-        $upcomingEvents = Event::where('start_date', '>', now())->count();
-        $thisMonthEvents = Event::whereMonth('start_date', date('m'))
-            ->whereYear('start_date', date('Y'))
-            ->count();
+        $totalEvents = Event::where('church_id', $churchId)->count();
+        $upcomingEvents = Event::where('church_id', $churchId)
+                        ->where('start_date', '>', now())
+                        ->count();
+        $thisMonthEvents = Event::where('church_id', $churchId)
+                            ->whereMonth('start_date', date('m'))
+                            ->whereYear('start_date', date('Y'))
+                            ->count();
 
         // Attendance stats
         $thisMonthStart = now()->startOfMonth();
         $thisMonthEnd = now()->endOfMonth();
-        $monthAttendance = Attendance::whereBetween('created_at', [$thisMonthStart, $thisMonthEnd])
-            ->sum('total');
+        $monthAttendance = Attendance::where('church_id', $churchId)
+                        ->whereBetween('created_at', [$thisMonthStart, $thisMonthEnd])
+                        ->sum('total');
 
         $lastMonthStart = now()->subMonth()->startOfMonth();
         $lastMonthEnd = now()->subMonth()->endOfMonth();
-        $lastMonthAttendance = Attendance::whereBetween('created_at', [$lastMonthStart, $lastMonthEnd])
-            ->sum('total');
+        $lastMonthAttendance = Attendance::where('church_id', $churchId)
+                            ->whereBetween('created_at', [$lastMonthStart, $lastMonthEnd])
+                            ->sum('total');
 
         $attendanceGrowth = $lastMonthAttendance > 0 ?
             (($monthAttendance - $lastMonthAttendance) / $lastMonthAttendance) * 100 : 100;
@@ -89,10 +100,10 @@ class DashboardController extends Controller
                     'id' => $member->id,
                     'type' => 'member',
                     'title' => 'New Member Added',
-                    'description' => $member->first_name . ' ' . $member->last_name . ' joined the church',
+                    'description' => $member->first_name . ' ' . $member->other_name . ' ' . $member->last_name . ' joined the church',
                     'time' => $member->created_at->diffForHumans(),
                     'avatar' => $member->getAvatarColor(),
-                    'initials' => strtoupper(substr($member->first_name, 0, 1) . substr($member->last_name, 0, 1)),
+                    'initials' => strtoupper(substr($member->first_name, 0, 1) . substr($member->other_name, 0, 1) . substr($member->last_name, 0, 1)),
                 ];
             });
 
@@ -146,10 +157,12 @@ class DashboardController extends Controller
 
     public function upcomingEvents()
     {
-        $events = Event::with('attendances')
-            ->where('start_date', '>', now())
+        $churchId = auth()->user()->church_id;
+
+        $events = Event::where('church_id', $churchId)
+            ->where('start_date', '>=', now())
             ->orderBy('start_date')
-            ->limit(10)
+            ->limit(5)
             ->get()
             ->map(function ($event) {
                 return [
@@ -175,7 +188,9 @@ class DashboardController extends Controller
 
     public function recentMembers()
     {
-        $members = Member::with('church')
+        $churchId = auth()->user()->church_id;
+
+        $members = Member::where('church_id', $churchId)
             ->orderByDesc('created_at')
             ->limit(10)
             ->get()
@@ -183,6 +198,7 @@ class DashboardController extends Controller
                 return [
                     'id' => $member->id,
                     'first_name' => $member->first_name,
+                    'other_name' => $member->other_name,
                     'last_name' => $member->last_name,
                     'email' => $member->email,
                     'phone' => $member->phone,
@@ -190,7 +206,7 @@ class DashboardController extends Controller
                     'membership_status' => $member->membership_status,
                     'occupation' => $member->occupation,
                     'avatar_color' => $this->getAvatarColor($member),
-                    'initials' => strtoupper(substr($member->first_name, 0, 1) . substr($member->last_name, 0, 1)),
+                    'initials' => strtoupper(substr($member->first_name, 0, 1) . substr($member->other_name, 0, 1) . substr($member->last_name, 0, 1)),
                     'created_at' => $member->created_at,
                     'time_ago' => $member->created_at->diffForHumans(),
                 ];
@@ -331,7 +347,7 @@ class DashboardController extends Controller
     private function getAvatarColor($member)
     {
         $colors = ['primary', 'secondary', 'success', 'error', 'warning', 'info', 'purple', 'pink', 'teal'];
-        $name = ($member->first_name . $member->last_name);
+        $name = ($member->first_name . $member->other_name . $member->last_name);
         $hash = 0;
         for ($i = 0; $i < strlen($name); $i++) {
             $hash = ord($name[$i]) + (($hash << 5) - $hash);

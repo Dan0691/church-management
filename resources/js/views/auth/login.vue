@@ -5,7 +5,7 @@
         <v-row align="center" justify="center">
           <v-col cols="12" xl="5" lg="6" md="7" sm="10">
             <v-card class="auth-card elevation-10 rounded-lg">
-              <!-- Card Header with Logo -->
+              <!-- Header -->
               <div class="auth-header">
                 <v-avatar color="primary" size="64" class="mb-4">
                   <v-icon icon="mdi-church" size="32"></v-icon>
@@ -17,44 +17,8 @@
               </div>
 
               <v-card-text class="px-8 pb-8 pt-2">
-                <!-- Demo Credentials Banner -->
-                <v-alert
-                  v-if="demoCredentials"
-                  type="info"
-                  variant="tonal"
-                  class="mb-6 rounded-lg"
-                  border="start"
-                  density="comfortable"
-                >
-                  <template v-slot:prepend>
-                    <v-icon icon="mdi-information" color="info"></v-icon>
-                  </template>
-                  <div class="d-flex flex-column">
-                    <span class="font-weight-bold">Demo Account Available</span>
-                    <div class="demo-credentials mt-2">
-                      <div class="d-flex align-center mb-1">
-                        <v-icon icon="mdi-email" size="16" class="mr-2"></v-icon>
-                        <span class="text-caption">admin@church.com</span>
-                      </div>
-                      <div class="d-flex align-center">
-                        <v-icon icon="mdi-lock" size="16" class="mr-2"></v-icon>
-                        <span class="text-caption">password</span>
-                      </div>
-                    </div>
-                    <v-btn
-                      color="info"
-                      variant="text"
-                      size="x-small"
-                      @click="fillDemoCredentials"
-                      class="mt-2 align-self-start"
-                    >
-                      Try Demo
-                    </v-btn>
-                  </div>
-                </v-alert>
-
                 <v-form @submit.prevent="login" ref="loginForm" class="auth-form">
-                  <!-- Email Field -->
+                  <!-- Email -->
                   <div class="input-container mb-4">
                     <label class="input-label">Email Address</label>
                     <v-text-field
@@ -73,13 +37,16 @@
                     ></v-text-field>
                   </div>
 
-                  <!-- Password Field -->
+                  <!-- Password -->
                   <div class="input-container mb-2">
                     <div class="d-flex justify-space-between align-center mb-1">
                       <label class="input-label">Password</label>
-                      <a href="#" class="text-primary text-decoration-none text-caption font-weight-medium">
+                      <router-link
+                        :to="{ name: 'forgot-password' }"
+                        class="text-primary text-decoration-none text-caption font-weight-medium"
+                      >
                         Forgot Password?
-                      </a>
+                      </router-link>
                     </div>
                     <v-text-field
                       v-model="form.password"
@@ -100,7 +67,7 @@
                   </div>
 
                   <!-- Remember Me -->
-                  <div class="d-flex align-center justify-space-between mt-4 mb-6">
+                  <div class="d-flex align-center mt-4 mb-6">
                     <v-checkbox
                       v-model="form.remember"
                       label="Remember me"
@@ -108,18 +75,9 @@
                       hide-details
                       color="primary"
                     ></v-checkbox>
-                    <v-btn
-                      color="primary"
-                      variant="text"
-                      size="small"
-                      @click="fillDemoCredentials"
-                      prepend-icon="mdi-account-clock"
-                    >
-                      Demo Login
-                    </v-btn>
                   </div>
 
-                  <!-- Error Alert -->
+                  <!-- General Error -->
                   <v-alert
                     v-if="errors.general"
                     type="error"
@@ -128,6 +86,19 @@
                     class="mb-4 rounded-lg"
                   >
                     {{ errors.general }}
+                  </v-alert>
+
+                  <!-- Field Errors (optional, you can also show them inline as above) -->
+                  <v-alert
+                    v-if="fieldErrors.length"
+                    type="error"
+                    variant="tonal"
+                    density="compact"
+                    class="mb-4 rounded-lg"
+                  >
+                    <ul class="mb-0">
+                      <li v-for="(err, index) in fieldErrors" :key="index">{{ err }}</li>
+                    </ul>
                   </v-alert>
 
                   <!-- Login Button -->
@@ -175,7 +146,7 @@
                   </v-btn>
                 </div>
 
-                <!-- Support Link -->
+                <!-- Support -->
                 <div class="text-center mt-6 pt-4 border-t">
                   <p class="text-caption text-medium-emphasis">
                     Need assistance?
@@ -203,7 +174,8 @@
 </template>
 
 <script setup>
-import { ref } from 'vue'
+// import { ref} from 'vue'
+import { ref, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '../../stores/auth'
 import { useToast } from 'vue-toastification'
@@ -222,12 +194,22 @@ const form = ref({
 const errors = ref({})
 const loading = ref(false)
 const showPassword = ref(false)
-const demoCredentials = ref(true)
+
+// Combine field errors into a flat array for display (optional)
+const fieldErrors = computed(() => {
+  const errs = []
+  for (const key in errors.value) {
+    if (key !== 'general' && errors.value[key]) {
+      errs.push(errors.value[key])
+    }
+  }
+  return errs
+})
 
 const rules = {
   required: value => !!value || 'This field is required',
   email: value => {
-    const pattern = /^(([^<>()[\]\\.,;:\s@"]+(\.[^<>()[\]\\.,;:\s@"]+)*)|(".+"))@((\[[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}])|(([a-zA-Z\-0-9]+\.)+[a-zA-Z]{2,}))$/
+    const pattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
     return pattern.test(value) || 'Invalid email format'
   }
 }
@@ -251,7 +233,7 @@ const login = async () => {
     const result = await authStore.login(form.value)
 
     if (result.success) {
-      // Success! The auth store already handled token storage and redirection
+      // Success! Redirect to dashboard or home
       router.push('/')
     } else {
       // Handle backend errors
@@ -267,12 +249,6 @@ const login = async () => {
   } finally {
     loading.value = false
   }
-}
-
-const fillDemoCredentials = () => {
-  form.value.email = 'admin@church.com'
-  form.value.password = 'password'
-  toast.info('Demo credentials filled! Click Sign In to continue.')
 }
 </script>
 
@@ -336,16 +312,5 @@ const fillDemoCredentials = () => {
 .auth-btn:hover {
   transform: translateY(-2px);
   box-shadow: 0 6px 20px rgba(102, 126, 234, 0.6);
-}
-
-.demo-credentials {
-  background: rgba(33, 150, 243, 0.1);
-  padding: 10px 12px;
-  border-radius: 8px;
-  font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
-}
-
-:deep(.v-alert) {
-  border-radius: 12px !important;
 }
 </style>

@@ -25,7 +25,7 @@ use App\Http\Controllers\Api\DiagnosticController;
 */
 
 Route::post('/login', [AuthController::class, 'login']);
-Route::post('/register/church', [AuthController::class, 'register']); // Change from GET to POST
+Route::post('/register/church', [AuthController::class, 'register']);
 Route::post('/forgot-password', [AuthController::class, 'forgotPassword']);
 Route::post('/reset-password', [AuthController::class, 'resetPassword']);
 // Profile photo routes
@@ -73,9 +73,7 @@ Route::middleware(['auth:sanctum'])->group(function () {
         // Basic CRUD
         Route::get('/', [MemberController::class, 'index']);
         Route::post('/', [MemberController::class, 'store']);
-        Route::get('/{id}', [MemberController::class, 'show']);
-        Route::put('/{id}', [MemberController::class, 'update']);
-        Route::delete('/{id}', [MemberController::class, 'destroy']);
+
 
         // Route::get('/download-template', [MemberController::class, 'downloadTemplate']);
 
@@ -86,9 +84,7 @@ Route::middleware(['auth:sanctum'])->group(function () {
 
         // Import/Export
         Route::post('/import', [MemberController::class, 'import']);
-        Route::get('/export/{format?}', [MemberController::class, 'export']);
         Route::get('/template', [MemberController::class, 'downloadTemplate']);
-
 
         // Statistics and Reports
         Route::get('/stats', [MemberController::class, 'stats']);
@@ -114,6 +110,10 @@ Route::middleware(['auth:sanctum'])->group(function () {
 
         // Print
         Route::get('/print', [MemberController::class, 'print']);
+        Route::get('/export/{format?}', [MemberController::class, 'export']);
+        Route::get('/{id}', [MemberController::class, 'show']);
+        Route::put('/{id}', [MemberController::class, 'update']);
+        Route::delete('/{id}', [MemberController::class, 'destroy']);
     });
 
     // Events CRUD

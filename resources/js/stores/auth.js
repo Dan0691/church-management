@@ -137,6 +137,38 @@ export const useAuthStore = defineStore('auth', () => {
         }
     };
 
+    const forgotPassword = async (data) => {
+    isLoading.value = true
+    try {
+        const response = await axios.post('/api/forgot-password', data)
+        return { success: true, message: response.data.message }
+    } catch (error) {
+        return {
+        success: false,
+        message: error.response?.data?.message || 'Request failed',
+        errors: error.response?.data?.errors
+        }
+    } finally {
+        isLoading.value = false
+    }
+    }
+
+    const resetPassword = async (data) => {
+    isLoading.value = true
+    try {
+        const response = await axios.post('/api/reset-password', data)
+        return { success: true, message: response.data.message }
+    } catch (error) {
+        return {
+        success: false,
+        message: error.response?.data?.message || 'Reset failed',
+        errors: error.response?.data?.errors
+        }
+    } finally {
+        isLoading.value = false
+    }
+    }
+
     const logout = async () => {
         try {
             await axios.post('/api/logout');
@@ -205,6 +237,8 @@ export const useAuthStore = defineStore('auth', () => {
         register,
         logout,
         fetchUser,
-        updateProfile
+        updateProfile,
+        forgotPassword,    
+        resetPassword      
     };
 });

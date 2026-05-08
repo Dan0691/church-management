@@ -141,16 +141,16 @@
           <v-card-text>
             <v-list lines="two" v-if="recentMembers.length > 0">
               <v-list-item
-                v-for="member in recentMembers"
-                :key="member.id"
-                :to="`/members/${member.id}`"
-              >
+                <!-- v-for="member in recentMembers" -->
+                <!-- :key="member.id" -->
+                <!-- :to="`/members/${member.id}`" -->
+              <!-- > -->
                 <template #prepend>
                   <v-avatar :color="getAvatarColor(member)" size="40">
                     <span class="text-white">{{ getInitials(member) }}</span>
                   </v-avatar>
                 </template>
-                <v-list-item-title>{{ member.first_name }} {{ member.last_name }}</v-list-item-title>
+                <v-list-item-title>{{ member.first_name }} {{ member.other_name }} {{ member.last_name }}</v-list-item-title>
                 <v-list-item-subtitle>
                   Joined {{ formatRelativeDate(member.join_date) }}
                 </v-list-item-subtitle>
@@ -249,7 +249,8 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, onUnmounted } from 'vue'
+// import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '../../stores/auth'
 import { useToast } from 'vue-toastification'
@@ -385,13 +386,14 @@ const formatDateTime = (dateString) => {
 
 const getInitials = (member) => {
   const first = member.first_name?.[0] || ''
+  const other = member.other_name?.[0] || ''
   const last = member.last_name?.[0] || ''
-  return (first + last).toUpperCase() || '?'
+  return (first + other + last).toUpperCase() || '?'
 }
 
 const getAvatarColor = (member) => {
   const colors = ['primary', 'secondary', 'success', 'error', 'warning', 'info', 'purple', 'pink', 'teal']
-  const name = (member.first_name + member.last_name).toLowerCase()
+  const name = (member.first_name + member.other_name + member.last_name).toLowerCase()
   let hash = 0
   for (let i = 0; i < name.length; i++) {
     hash = name.charCodeAt(i) + ((hash << 5) - hash)
@@ -456,14 +458,11 @@ const fetchDashboardStats = async () => {
   }
 }
 
-// Fetch recent members
+// Replace fetchRecentMembers with:
 const fetchRecentMembers = async () => {
   try {
     const client = getApiClient()
-    const response = await client.get('/members/recent', {
-      params: { limit: 5 }
-    })
-
+    const response = await client.get('/dashboard/recent-members')  // changed
     if (response.data.success && Array.isArray(response.data.data)) {
       recentMembers.value = response.data.data
     }
@@ -472,14 +471,11 @@ const fetchRecentMembers = async () => {
   }
 }
 
-// Fetch upcoming events
+// Replace fetchUpcomingEvents with:
 const fetchUpcomingEvents = async () => {
   try {
     const client = getApiClient()
-    const response = await client.get('/events/upcoming', {
-      params: { limit: 5 }
-    })
-
+    const response = await client.get('/dashboard/upcoming-events')  // changed
     if (response.data.success && Array.isArray(response.data.data)) {
       upcomingEvents.value = response.data.data
     }
@@ -489,10 +485,30 @@ const fetchUpcomingEvents = async () => {
 }
 
 // Fetch all dashboard data
+// const fetchDashboardData = async () => {
+//   loading.value = true
+//   try {
+//     // Fetch all data in parallel
+//     await Promise.all([
+//       fetchDashboardStats(),
+//       fetchRecentMembers(),
+//       fetchUpcomingEvents()
+//     ])
+//   } catch (error) {
+//     console.error('Error fetching dashboard data:', error)
+//   } finally {
+//     loading.value = false
+//   }
+// }
+
 const fetchDashboardData = async () => {
   loading.value = true
   try {
-    // Fetch all data in parallel
+    // Reset data before fetching
+    dashboardStats.value = { members: { total: 0, active: 0, new_this_month: 0, growth_percentage: 0 }, events: { total: 0, upcoming: 0, this_month: 0 }, attendance: { this_month: 0, last_month: 0, growth_percentage: 0 }, system: { status: 'online', last_backup: 'N/A', storage_used: '0%' } }
+    recentMembers.value = []
+    upcomingEvents.value = []
+
     await Promise.all([
       fetchDashboardStats(),
       fetchRecentMembers(),
@@ -500,6 +516,7 @@ const fetchDashboardData = async () => {
     ])
   } catch (error) {
     console.error('Error fetching dashboard data:', error)
+    toast.error('Failed to load dashboard data')
   } finally {
     loading.value = false
   }
@@ -551,6 +568,20 @@ onUnmounted(() => {
   if (clockInterval) clearInterval(clockInterval)
   if (refreshInterval) clearInterval(refreshInterval)
 })
+
+// Watch for church changes and refetch data
+watch(
+  () => church.value?.id,
+  async (newChurchId, oldChurchId) => {
+    if (newChurchId && newChurchId !== oldChurchId) {
+      // Optionally show a loading indicator while fetching
+      loading.value = true
+      await fetchDashboardData()
+      loading.value = false
+    }
+  },
+  { immediate: true } // Fetch immediately when component is created
+)
 </script>
 
 <style scoped>

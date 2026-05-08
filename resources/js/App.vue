@@ -1,6 +1,12 @@
 <!-- resources/js/App.vue -->
 <template>
   <router-view />
+   <!-- <router-view v-slot="{ Component }">
+  <transition>
+    <component :is="Component" />
+  </transition>
+</router-view> -->
+
   <v-overlay
     v-model="globalLoading"
     class="align-center justify-center"

@@ -75,6 +75,7 @@ class AttendanceController extends Controller
 
     public function store(Request $request)
     {
+        $user = auth()->user();
         $validator = Validator::make($request->all(), [
             'event_id' => 'required|exists:events,id',
             'men' => 'required|integer|min:0',
@@ -107,6 +108,7 @@ class AttendanceController extends Controller
 
     public function show($id)
     {
+        
         $attendance = Attendance::with(['event', 'recorder'])->findOrFail($id);
 
         return response()->json([
@@ -117,6 +119,8 @@ class AttendanceController extends Controller
 
     public function update(Request $request, $id)
     {
+        $user = auth()->user();
+
         $attendance = Attendance::findOrFail($id);
 
         $validator = Validator::make($request->all(), [
@@ -152,6 +156,8 @@ class AttendanceController extends Controller
      */
     public function destroy($id)
     {
+        $user = auth()->user();
+
         $attendance = Attendance::findOrFail($id);
         $attendance->delete();
 
@@ -163,6 +169,7 @@ class AttendanceController extends Controller
 
     public function getByEvent($event_id)
     {
+        
         $attendances = Attendance::with('recorder')
             ->where('event_id', $event_id)
             ->orderByDesc('created_at')

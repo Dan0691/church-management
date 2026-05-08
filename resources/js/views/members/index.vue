@@ -317,7 +317,7 @@
                     <span class="text-white">{{ getInitials(member) }}</span>
                   </v-avatar>
                   <div>
-                    <div class="font-weight-medium">{{ member.first_name }} {{ member.last_name }}</div>
+                    <div class="font-weight-medium">{{ member.first_name }} {{ member.other_name }} {{ member.last_name }}</div>
                     <div class="text-caption text-medium-emphasis">
                       {{ member.occupation || 'No occupation' }}
                       <v-chip v-if="member.gender" size="x-small" class="ml-1">{{ formatGender(member.gender) }}</v-chip>
@@ -440,7 +440,7 @@
     </v-card>
 
     <!-- Create/Edit Dialog -->
-    <v-dialog v-model="dialog" max-width="800" scrollable persistent>
+    <v-dialog v-model="dialog" max-width="850" scrollable persistent>
       <v-card>
         <v-card-title class="d-flex justify-space-between align-center">
           <span class="text-h5">{{ editingMember ? 'Edit Member' : 'Add New Member' }}</span>
@@ -482,6 +482,15 @@
                     label="First Name *"
                     variant="outlined"
                     :rules="[v => !!v || 'First name is required']"
+                    required
+                  ></v-text-field>
+                </v-col>
+                 <v-col cols="12" md="6">
+                  <v-text-field
+                    v-model="form.other_name"
+                    label="Other Name"
+                    variant="outlined"
+                    :rules="[v => !!v || 'Other name is required']"
                     required
                   ></v-text-field>
                 </v-col>
@@ -639,7 +648,7 @@
                   <v-card variant="outlined" class="mb-3">
                     <v-card-title class="text-subtitle-1">Personal Information</v-card-title>
                     <v-card-text>
-                      <div><strong>Name:</strong> {{ form.first_name }} {{ form.last_name }}</div>
+                      <div><strong>Name:</strong> {{ form.first_name }} {{ form.other_name }} {{ form.last_name }}</div>
                       <div><strong>Gender:</strong> {{ form.gender ? formatGender(form.gender) : 'Not specified' }}</div>
                       <div><strong>Marital Status:</strong> {{ form.marital_status ? formatMaritalStatus(form.marital_status) : 'Not specified' }}</div>
                       <div><strong>Birth Date:</strong> {{ form.birth_date ? formatDate(form.birth_date) : 'Not specified' }}</div>
@@ -704,7 +713,7 @@
               <span class="text-white text-h6">{{ getInitials(selectedMember) }}</span>
             </v-avatar>
             <div>
-              <h2 class="text-h5">{{ selectedMember.first_name }} {{ selectedMember.last_name }}</h2>
+              <h2 class="text-h5">{{ selectedMember.first_name }} {{ selectedMember.other_name }} {{ selectedMember.last_name }}</h2>
               <div class="d-flex align-center mt-1">
                 <v-chip size="small" :color="getStatusColor(selectedMember.membership_status)" class="mr-2">
                   {{ formatStatus(selectedMember.membership_status) }}
@@ -736,7 +745,7 @@
                 <v-col cols="12" md="6">
                   <div class="info-item mb-3">
                     <div class="text-caption text-medium-emphasis">Full Name</div>
-                    <div class="text-body-1">{{ selectedMember.first_name }} {{ selectedMember.last_name }}</div>
+                    <div class="text-body-1">{{ selectedMember.first_name }} {{ selectedMember.other_name }} {{ selectedMember.last_name }}</div>
                   </div>
                 </v-col>
                 <v-col cols="12" md="6">
@@ -880,7 +889,7 @@
       <v-card>
         <v-card-title class="text-h5">Delete Member</v-card-title>
         <v-card-text>
-          Are you sure you want to delete <strong>{{ selectedMemberToDelete?.first_name }} {{ selectedMemberToDelete?.last_name }}</strong>?
+          Are you sure you want to delete <strong>{{ selectedMemberToDelete?.first_name }} {{ selectedMemberToDelete?.other_name }} {{ selectedMemberToDelete?.last_name }}</strong>?
           This action cannot be undone.
           <v-alert v-if="selectedMemberToDelete?.membership_status === 'active'" type="warning" class="mt-4">
             This member is currently active. Consider changing status to "inactive" instead.
@@ -995,6 +1004,10 @@ import * as XLSX from 'xlsx'
 import { saveAs } from 'file-saver'
 import { useAuthStore } from '../../stores/auth'
 
+const formatDateUTC = (year, month, day) => {
+  return `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`
+}
+
 const toast = useToast()
 const router = useRouter()
 const auth = useAuthStore()
@@ -1037,6 +1050,7 @@ const pagination = ref({
 
 const form = ref({
   first_name: '',
+  other_name: '',
   last_name: '',
   email: '',
   phone: '',
@@ -1229,13 +1243,14 @@ const calculateDuration = (joinDate) => {
 const getInitials = (member) => {
   if (!member) return '?'
   const first = member.first_name?.[0] || ''
+  const other = member.other_name?.[0] || ''
   const last = member.last_name?.[0] || ''
-  return (first + last).toUpperCase() || '?'
+  return (first + other + last).toUpperCase() || '?'
 }
 
 const getAvatarColor = (member) => {
   const colors = ['primary', 'secondary', 'success', 'error', 'warning', 'info', 'purple', 'pink', 'teal']
-  const name = ((member.first_name || '') + (member.last_name || '')).toLowerCase()
+  const name = ((member.first_name || '') + (member.other_name || '') + (member.last_name || '')).toLowerCase()
   if (!name) return colors[0]
   let hash = 0
   for (let i = 0; i < name.length; i++) {
@@ -1265,14 +1280,29 @@ const fetchMembers = async () => {
       return
     }
 
+    // const params = {
+    //   page: pagination.value.current_page,
+    //   per_page: pagination.value.per_page,
+    //   sort_by: sortBy.value,
+    //   search: search.value,
+    //   status: statusFilter.value,
+    //   ...advancedFilters.value
+    // }
+
     const params = {
-      page: pagination.value.current_page,
-      per_page: pagination.value.per_page,
-      sort_by: sortBy.value,
-      search: search.value,
-      status: statusFilter.value,
-      ...advancedFilters.value
-    }
+  page: pagination.value.current_page,
+  per_page: pagination.value.per_page,
+  sort_by: sortBy.value,
+  search: search.value,
+  status: statusFilter.value,
+  ...(advancedFilters.value.gender?.length && { gender: advancedFilters.value.gender }),
+  ...(advancedFilters.value.marital_status?.length && { marital_status: advancedFilters.value.marital_status }),
+  ...(advancedFilters.value.city && { city: advancedFilters.value.city }),
+  ...(advancedFilters.value.occupation && { occupation: advancedFilters.value.occupation }),
+  ...(advancedFilters.value.birthYear && { birthYear: advancedFilters.value.birthYear }),
+  ...(advancedFilters.value.joinDateRange.start && { 'joinDateRange[start]': advancedFilters.value.joinDateRange.start }),
+  ...(advancedFilters.value.joinDateRange.end && { 'joinDateRange[end]': advancedFilters.value.joinDateRange.end }),
+}
 
     // Clean up empty params
     Object.keys(params).forEach(key => {
@@ -1326,15 +1356,44 @@ const fetchMembers = async () => {
   }
 }
 
+// const fetchStats = async () => {
+//   try {
+//     const token = localStorage.getItem('token')
+//     if (!token) return
+
+//     // Try dedicated stats endpoint
+//     const response = await axios.get('/api/members/stats', {
+//       headers: { Authorization: `Bearer ${token}` }
+//     })
+
+//     if (response.data.success && response.data.data) {
+//       stats.value = {
+//         total: response.data.data.total || 0,
+//         active: response.data.data.active || 0,
+//         visitors: response.data.data.visitors || 0,
+//         new_this_month: response.data.data.new_this_month || 0
+//       }
+//     } else {
+//       // Fallback: get total count from first page
+//       const fallback = await axios.get('/api/members', {
+//         headers: { Authorization: `Bearer ${token}` },
+//         params: { per_page: 1, page: 1 }
+//       })
+//       if (fallback.data.meta) {
+//         stats.value.total = fallback.data.meta.total || 0
+//       }
+//     }
+//   } catch (error) {
+//     console.error('Error fetching stats:', error)
+//   }
+// }
+
 const fetchStats = async () => {
   try {
-    const token = localStorage.getItem('token')
-    if (!token) return
-
-    // Try dedicated stats endpoint
+    const token = localStorage.getItem('token');
     const response = await axios.get('/api/members/stats', {
       headers: { Authorization: `Bearer ${token}` }
-    })
+    });
 
     if (response.data.success && response.data.data) {
       stats.value = {
@@ -1342,19 +1401,10 @@ const fetchStats = async () => {
         active: response.data.data.active || 0,
         visitors: response.data.data.visitors || 0,
         new_this_month: response.data.data.new_this_month || 0
-      }
-    } else {
-      // Fallback: get total count from first page
-      const fallback = await axios.get('/api/members', {
-        headers: { Authorization: `Bearer ${token}` },
-        params: { per_page: 1, page: 1 }
-      })
-      if (fallback.data.meta) {
-        stats.value.total = fallback.data.meta.total || 0
-      }
+      };
     }
   } catch (error) {
-    console.error('Error fetching stats:', error)
+    console.error('Error fetching stats:', error);
   }
 }
 
@@ -1379,14 +1429,20 @@ const filterVisitors = () => {
   fetchMembers()
 }
 
+
+
 const filterNewThisMonth = () => {
   resetAllFilters()
   const now = new Date()
-  const firstDay = new Date(now.getFullYear(), now.getMonth(), 1)
-  const lastDay = new Date(now.getFullYear(), now.getMonth() + 1, 0)
-  advancedFilters.value.joinDateRange.start = firstDay.toISOString().split('T')[0]
-  advancedFilters.value.joinDateRange.end = lastDay.toISOString().split('T')[0]
+  const year = now.getFullYear()
+  const month = now.getMonth() // 0-indexed
+  const firstDay = formatDateUTC(year, month, 1)
+  const lastDay = formatDateUTC(year, month + 1, 0) // day 0 of next month
+  advancedFilters.value.joinDateRange.start = firstDay
+  advancedFilters.value.joinDateRange.end = lastDay
+  console.log('New this month range:', advancedFilters.value.joinDateRange)
   quickFilters.value.forEach(f => { f.active = f.value === 'new_month' })
+  pagination.value.current_page = 1
   fetchMembers()
 }
 
@@ -1405,12 +1461,12 @@ const applyQuickFilter = (filter) => {
       statusFilter.value = 'visitor'
       break
     case 'new_month':
-      const now = new Date()
-      const firstDay = new Date(now.getFullYear(), now.getMonth(), 1)
-      const lastDay = new Date(now.getFullYear(), now.getMonth() + 1, 0)
-      advancedFilters.value.joinDateRange.start = firstDay.toISOString().split('T')[0]
-      advancedFilters.value.joinDateRange.end = lastDay.toISOString().split('T')[0]
-      break
+    const now = new Date()
+    const year = now.getFullYear()
+    const month = now.getMonth()
+    advancedFilters.value.joinDateRange.start = formatDateUTC(year, month, 1)
+    advancedFilters.value.joinDateRange.end = formatDateUTC(year, month + 1, 0)
+    break
     case 'no_email':
       search.value = 'no-email'
       break
@@ -1444,6 +1500,7 @@ const resetAllFilters = () => {
   resetAdvancedFilters()
   quickFilters.value.forEach(f => f.active = false)
   pagination.value.current_page = 1
+  fetchMembers()
 }
 
 const applyAdvancedFilters = () => {
@@ -1474,8 +1531,8 @@ const validatePersonal = async () => {
       toast.error('Please fill in all required fields in Personal Info')
       return false
     }
-  } else if (!form.value.first_name.trim() || !form.value.last_name.trim()) {
-    toast.error('Please fill in First Name and Last Name')
+  } else if (!form.value.first_name.trim() || !form.value.other_name.trim() || !form.value.last_name.trim()) {
+    toast.error('Please fill in First Name, Other Name and Last Name')
     return false
   }
   return true
@@ -1510,6 +1567,9 @@ const editMember = (member) => {
   editingMember.value = member
   form.value = {
     ...member,
+    gender: member.gender ? member.gender.toLowerCase() : '', // 👈 force lowercase
+    marital_status: member.marital_status ? member.marital_status.toLowerCase() : '', // 👈 force lowercase
+    membership_status: member.membership_status ? member.membership_status.toLowerCase() : '', // 👈 force lowercase
     birth_date: member.birth_date ? formatDateForInput(member.birth_date) : '',
     join_date: member.join_date ? formatDateForInput(member.join_date) : new Date().toISOString().split('T')[0]
   }
@@ -1534,6 +1594,7 @@ const saveMember = async () => {
     const token = localStorage.getItem('token')
     const payload = {
       first_name: form.value.first_name.trim(),
+      other_name: form.value.other_name.trim(),
       last_name: form.value.last_name.trim(),
       email: form.value.email?.trim() || null,
       phone: form.value.phone?.trim() || null,
@@ -1621,6 +1682,7 @@ const closeDialog = () => {
 const resetForm = () => {
   form.value = {
     first_name: '',
+    other_name: '',
     last_name: '',
     email: '',
     phone: '',
@@ -1775,6 +1837,7 @@ const downloadTemplate = () => {
     const sampleData = [
       {
         first_name: 'John',
+        other_name: 'Tinubu',
         last_name: 'Doe',
         email: 'john@example.com',
         phone: '07012345678',
@@ -1830,6 +1893,7 @@ const exportMembers = async () => {
     const exportData = data.map((member, index) => ({
       'No.': index + 1,
       'First Name': member.first_name,
+      'Other Name': member.other_name,
       'Last Name': member.last_name,
       'Email': member.email || '',
       'Phone': member.phone || '',
@@ -1924,7 +1988,7 @@ const printMembers = async () => {
               ${allMembers.map((m, index) => `
                 <tr>
                   <td>${index + 1}</td>
-                  <td>${m.first_name} ${m.last_name}</td>
+                  <td>${m.first_name} ${m.other_name} ${m.last_name}</td>
                   <td>
                     ${m.email ? `<div>${m.email}</div>` : ''}
                     ${m.phone ? `<div>${m.phone}</div>` : ''}
